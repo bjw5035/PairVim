@@ -90,8 +90,12 @@ source ~/.zshrc
 
 | 키 | 동작 |
 |---|---|
-| `Space a a` | Claude Code / Codex 선택 메뉴 |
+| `F2` | Claude Code / Codex 패널 선택/토글 |
 | `Space a c` | Claude Code 패널 토글 |
 | `Space a x` | Codex 패널 토글 |
+| `Ctrl+h/j/k/l` | 창 이동 (AI 패널 안에서도 동작) |
+| `Space -` | 아래로 분할 |
+| `Space \` | 오른쪽으로 분할 |
 | (패널 안에서) `Esc` | 터미널 노멀 모드로 빠져나가기 |
-| (패널 안에서) `Ctrl+h/j/k/l` | 창 이동 |
+
+`Space w` 그룹(분할/이동/창목록이 섞여있음)은 헷갈리니 그냥 안 쓰는 걸 추천.
