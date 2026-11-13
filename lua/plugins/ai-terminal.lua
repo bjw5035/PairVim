@@ -90,19 +90,23 @@ return {
         end)
       end
 
-      vim.keymap.set({ "n", "t" }, "<leader>aa", pick_ai, { desc = "Select AI tool (Claude/Codex)" })
-      vim.keymap.set({ "n", "t" }, "<leader>ac", toggle_claude, { desc = "Toggle Claude Code" })
-      vim.keymap.set({ "n", "t" }, "<leader>ax", toggle_codex, { desc = "Toggle Codex" })
+      local ok_wk, wk = pcall(require, "which-key")
+      if ok_wk then
+        wk.add({ { "<leader>a", group = "AI 도구" } })
+      end
+
+      vim.keymap.set({ "n", "t" }, "<leader>aa", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
+      vim.keymap.set({ "n", "t" }, "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
+      vim.keymap.set({ "n", "t" }, "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
 
       vim.api.nvim_create_autocmd("TermOpen", {
         pattern = "term://*",
         callback = function()
-          local term_opts = { buffer = 0 }
-          vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], term_opts)
-          vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], term_opts)
-          vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], term_opts)
-          vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], term_opts)
-          vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], term_opts)
+          vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], { buffer = 0, desc = "터미널 노멀 모드로 빠져나가기" })
+          vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], { buffer = 0, desc = "왼쪽 창으로 이동" })
+          vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], { buffer = 0, desc = "아래 창으로 이동" })
+          vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], { buffer = 0, desc = "위 창으로 이동" })
+          vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], { buffer = 0, desc = "오른쪽 창으로 이동" })
         end,
       })
     end,
