@@ -145,3 +145,9 @@ echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bash
 상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`만 켜면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다.
 
 `Space w` 그룹(분할/이동/창목록이 섞여있음)은 헷갈리니 그냥 안 쓰는 걸 추천.
+
+## 시험
+
+- `bash tests/test_install.sh` — 설치 스크립트 시험(nvim 불필요, 홈 폴더를 건드리지 않음)
+- `nvim --headless -u NONE -l tests/test_pane_tabs.lua` — 창별 탭 단위 시험(플러그인 불필요)
+- `bash tests/test_e2e.sh` — 실제 nvim 을 가상 터미널에서 켜서 창 종류(파일·탐색기·Claude/셸 패널·분할) × 동작(분할·닫기·탭·창 이동·종료) 조합과 무작위 조합을 점검한다. 격리 폴더(`/tmp/pairvim-e2e`)에 플러그인을 설치해 쓰며 내 설정은 건드리지 않는다. 버그를 고칠 때는 여기에 재현 시나리오를 먼저 추가한다.
