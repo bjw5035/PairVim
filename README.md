@@ -11,7 +11,28 @@
 
 ## 새 PC에서 세팅하기
 
-### 1. 필수 프로그램 설치
+### 빠른 설치 (추천)
+
+Neovim 설치부터 PairVim 설정 적용까지 한 번에:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bjw5035/PairVim/main/install.sh | bash
+```
+
+(apt 기반 배포판/WSL 기준. 내부적으로 Neovim, git, node/npm, ripgrep, fd가 없으면 설치하고, `~/.config/nvim`에 이 레포를 클론하고, `pairvim` alias와 npm 전역 설치 경로까지 자동으로 잡아줍니다.)
+
+설치 끝나면:
+
+```bash
+source ~/.zshrc   # 또는 새 터미널 열기
+pairvim           # 또는 nvim
+```
+
+처음 실행하면 lazy.nvim이 플러그인을 설치하고, `codex`/`claude` CLI도 없으면 자동 설치됩니다. 메시지 다 지나갈 때까지 기다렸다가 아무 키나 누르면 끝.
+
+### 수동 설치 (curl 스크립트를 못 쓰거나 직접 하나씩 하고 싶을 때)
+
+#### 1. 필수 프로그램 설치
 
 | 프로그램 | 용도 | 설치 (Ubuntu/WSL 기준) |
 |---|---|---|
@@ -21,7 +42,7 @@
 | ripgrep, fd-find | 파일/텍스트 검색 (Telescope 등) | `sudo apt install ripgrep fd-find` |
 | 어떤 Nerd Font | 아이콘 깨짐 방지 (터미널 폰트로 지정) | [nerdfonts.com](https://www.nerdfonts.com/)에서 하나 받아서 터미널 설정에 적용 |
 
-### 2. 이 설정 받기
+#### 2. 이 설정 받기
 
 기존 `~/.config/nvim`이 있다면 먼저 백업:
 
@@ -35,7 +56,7 @@ mv ~/.config/nvim ~/.config/nvim.bak
 git clone https://github.com/bjw5035/PairVim.git ~/.config/nvim
 ```
 
-### 3. 실행
+#### 3. 실행
 
 ```bash
 nvim
@@ -47,7 +68,7 @@ nvim
 
 설치 중 메시지가 다 지나갈 때까지 기다린 뒤 아무 키나 누르면 끝.
 
-### 4. (선택) npm 전역 설치가 권한 때문에 실패할 경우
+#### 4. (선택) npm 전역 설치가 권한 때문에 실패할 경우
 
 ```bash
 mkdir -p ~/.npm-global
@@ -58,7 +79,7 @@ source ~/.zshrc
 
 이후 nvim을 다시 열면 `codex`/`claude` 자동 설치가 정상적으로 진행됨.
 
-### 5. 단축키
+## 단축키
 
 | 키 | 동작 |
 |---|---|
