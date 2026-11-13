@@ -28,7 +28,7 @@ bash ~/pairvim-setup/install.sh --dry-run    # (선택) 무엇을 할지 미리 
 bash ~/pairvim-setup/install.sh
 ```
 
-- 저장소가 비공개라 `git clone`에서 GitHub 로그인을 물으면 **사용자 이름 + 개인 액세스 토큰(PAT)** 을 넣습니다(비밀번호가 아님).
+- 저장소는 공개라 로그인 없이 `git clone`이 됩니다. (비공개로 되돌린 경우: 사용자 이름 + 개인 액세스 토큰. fine-grained 토큰은 Repository access에서 이 저장소를 선택하고 Contents를 Read-only로 줘야 하며, 비밀번호는 받지 않습니다.)
 - `~/.config/nvim`에 **PairVim이 아닌 기존 설정**이 있으면, 옮길 목록을 보여 주고 `[y/N]`로 확인한 뒤 `nvim-old-<시각>` 이름으로 옮깁니다.
   - 옮기는 것: 설정(`~/.config/nvim`), 플러그인(`~/.local/share/nvim/lazy`), 상태(`~/.local/state/nvim`), 캐시(`~/.cache/nvim`)
   - 옮기지 않는 것: `runtime`, `mason`(LSP 등 도구는 그대로 재사용)
@@ -79,7 +79,7 @@ git -C ~/.config/nvim pull
   PAIRVIM_NVIM_REF=v0.12.6 bash ~/.config/nvim/build-pairvim.sh
   ```
 - **`codex` 자동 설치 실패**: `npm`이 없거나 네트워크 문제입니다. 직접: `npm install -g --prefix ~/.npm-global @openai/codex`
-- **로그인 창이 안 뜸/인증 실패**: 사용자 이름 `bjw5035` + 개인 액세스 토큰(PAT)을 넣습니다.
+- **클론에서 403/로그인 요구**: 저장소가 비공개로 바뀐 경우입니다. 위 토큰 설정(Only select repositories + Contents 읽기 전용)을 확인하세요.
 
 ### 수동 설치 (스크립트를 못 쓰거나 직접 하나씩 하고 싶을 때)
 
