@@ -119,6 +119,17 @@ return {
           vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], { buffer = 0, desc = "오른쪽 창으로 이동" })
         end,
       })
+
+      -- 다른 창으로 갔다가 터미널 창으로 돌아오면 노멀 모드로 남아 키가 Claude/Codex에 전달되지 않는다.
+      -- 터미널 버퍼에 들어올 때마다 입력 모드로 되돌린다. (Esc로 일부러 노멀 모드에 간 경우는 창 이동 전까지 유지)
+      vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+        pattern = "term://*",
+        callback = function()
+          if vim.bo.buftype == "terminal" then
+            vim.cmd("startinsert")
+          end
+        end,
+      })
     end,
   },
 }
