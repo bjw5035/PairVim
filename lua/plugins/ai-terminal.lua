@@ -99,6 +99,7 @@ return {
         wk.add({ { "<leader>a", group = "AI 도구" } })
       end
 
+      vim.keymap.set({ "n", "t" }, "<F2>", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
       vim.keymap.set({ "n", "t" }, "<leader>aa", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
       vim.keymap.set({ "n", "t" }, "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
       vim.keymap.set({ "n", "t" }, "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
