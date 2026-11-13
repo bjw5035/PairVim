@@ -128,7 +128,12 @@ return {
         pattern = "term://*",
         callback = function()
           if vim.bo.buftype == "terminal" then
-            vim.cmd("startinsert")
+            -- 이벤트 안에서 바로 호출하면 창 이동 명령이 끝나면서 무시되므로 다음 틱에 실행한다
+            vim.schedule(function()
+              if vim.bo.buftype == "terminal" and vim.fn.mode() == "n" then
+                vim.cmd("startinsert")
+              end
+            end)
           end
         end,
       })
