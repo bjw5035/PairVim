@@ -37,25 +37,27 @@ vim.keymap.set("n", "<leader>[", function() split_move("split") end, { desc = "�
 vim.keymap.set("n", "<leader>]", function() split_move("vsplit") end, { desc = "오른쪽으로 분할" })
 vim.keymap.set("n", "<leader>\\", function()
   local pt = require("config.pane-tabs")
-  -- which-key·오류 팝업 같은 떠 있는(floating) 창은 세지 않는다. 세면 마지막 창을 닫으려다 E444가 난다.
-  local normal = 0
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.api.nvim_win_get_config(w).relative == "" then
-      normal = normal + 1
-    end
-  end
   local win = vim.api.nvim_get_current_win()
-  if normal > 1 then
-    -- 분할 창 닫기: 닫는 창의 탭은 사라지지 않고 포커스가 가는 이웃 창으로 옮겨 간다.
+  -- 탐색기·터미널·떠 있는 창은 "파일 창"으로 세지 않는다. (세면 탐색기가 열린 채로 파일 창이 닫힌다)
+  if not pt.is_file_win(win) then
+    -- 파일 창이 아닌 곳(탐색기, 터미널 패널)에서 누르면 그 창만 닫는다
+    if vim.api.nvim_win_get_config(win).relative == "" then pcall(vim.cmd, "close") end
+    return
+  end
+  local files = pt.file_wins()
+  if #files > 1 then
+    -- 분할 창 닫기: 닫는 창의 탭은 사라지지 않고 포커스가 가는 이웃 파일 창으로 옮겨 간다.
     local moved = pt.list(win)
     vim.cmd("close")
     local now = vim.api.nvim_get_current_win()
-    for _, b in ipairs(moved) do pt.add(now, b) end
+    if pt.is_file_win(now) then
+      for _, b in ipairs(moved) do pt.add(now, b) end
+    end
   elseif #pt.list(win) > 1 then
-    -- 창은 하나, 탭이 여럿: 전부 닫지 않고 지금 탭만 닫는다.
+    -- 파일 창은 하나, 탭이 여럿: 전부 닫지 않고 지금 탭만 닫는다.
     pt.close()
   else
-    -- 마지막 창의 마지막 탭이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
+    -- 마지막 파일 창의 마지막 탭이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
     vim.cmd("confirm qall")
   end
 end, { desc = "창 닫기 (탭이 여럿이면 탭만, 마지막이면 종료)" })

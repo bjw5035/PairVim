@@ -48,6 +48,17 @@ function M.remove(w, b)
   set(w, out)
 end
 
+-- 현재 탭 페이지의 "파일 창" 목록(탐색기·터미널·떠 있는 창 제외)
+function M.file_wins()
+  local out = {}
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if is_file_win(w) then table.insert(out, w) end
+  end
+  return out
+end
+
+function M.is_file_win(w) return is_file_win(w) end
+
 function M.list(w) return clean(w or vim.api.nvim_get_current_win()) end
 
 -- 현재 창의 탭을 n칸 이동(순환)
