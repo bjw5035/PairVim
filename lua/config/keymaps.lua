@@ -36,6 +36,7 @@ end
 vim.keymap.set("n", "<leader>[", function() split_move("split") end, { desc = "아래로 분할" })
 vim.keymap.set("n", "<leader>]", function() split_move("vsplit") end, { desc = "오른쪽으로 분할" })
 vim.keymap.set("n", "<leader>\\", function()
+  local pt = require("config.pane-tabs")
   -- which-key·오류 팝업 같은 떠 있는(floating) 창은 세지 않는다. 세면 마지막 창을 닫으려다 E444가 난다.
   local normal = 0
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -43,13 +44,21 @@ vim.keymap.set("n", "<leader>\\", function()
       normal = normal + 1
     end
   end
+  local win = vim.api.nvim_get_current_win()
   if normal > 1 then
+    -- 분할 창 닫기: 닫는 창의 탭은 사라지지 않고 포커스가 가는 이웃 창으로 옮겨 간다.
+    local moved = pt.list(win)
     vim.cmd("close")
+    local now = vim.api.nvim_get_current_win()
+    for _, b in ipairs(moved) do pt.add(now, b) end
+  elseif #pt.list(win) > 1 then
+    -- 창은 하나, 탭이 여럿: 전부 닫지 않고 지금 탭만 닫는다.
+    pt.close()
   else
-    -- 마지막 창이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
+    -- 마지막 창의 마지막 탭이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
     vim.cmd("confirm qall")
   end
-end, { desc = "현재 창 닫기 (마지막 창이면 종료)" })
+end, { desc = "창 닫기 (탭이 여럿이면 탭만, 마지막이면 종료)" })
 
 -- 탭(버퍼) 이동/닫기를 Shift+h/l 대신 더 직관적인 Tab 키로 (브라우저 탭 전환과 같은 느낌)
 -- 탭은 창마다 따로다: 이동·닫기는 현재 창의 탭 목록 안에서만 한다.
@@ -135,4 +144,3 @@ if ok_wk_t then
   wk_t.add({ { "<leader>t", group = "터미널/terraform", icon = { icon = "★", color = "yellow" } } })
 end
 
-vim.keymap.set("n", "<leader>ts", function() require("config.ssh").pick() end, { desc = "서버 접속 (ssh 선택)" })

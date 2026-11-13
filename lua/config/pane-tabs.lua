@@ -1,6 +1,6 @@
 -- 창(분할)마다 자기 탭 목록을 갖는 탭줄. VS Code의 에디터 그룹과 같은 방식이다.
 --  - 각 파일 창 위쪽(winbar)에 그 창에서 연 파일들만 탭으로 보인다.
---  - 분할하면 새 창이 탭 목록을 물려받고, split_move가 옮긴 파일은 원래 창 목록에서 빠진다.
+--  - 새로 분할한 창은 현재 파일 하나로 시작한다(VS Code 와 같다). split_move 가 옮긴 파일은 원래 창 목록에서 빠진다.
 --  - 탭을 마우스로 누르면 이동, ✕를 누르면 그 창에서만 닫는다.
 local M = {}
 
@@ -154,10 +154,10 @@ local function refresh()
       vim.wo[w].winbar = ""
     end
   end
-  vim.cmd("redrawstatus!")
+  vim.cmd("redrawstatus")
 end
 
-vim.api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinEnter", "BufWinEnter", "BufEnter", "BufWritePost", "BufDelete", "BufModifiedSet", "TextChanged", "TextChangedI" }, {
+vim.api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinEnter", "BufWinEnter", "BufEnter", "BufWritePost", "BufDelete", "BufModifiedSet" }, {
   group = vim.api.nvim_create_augroup("pairvim_pane_tabs", { clear = true }),
   callback = function() vim.schedule(refresh) end,
 })

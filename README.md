@@ -136,12 +136,11 @@ echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bash
 | `Space b d` | 이 창에서 탭 닫기 (다른 창에도 없으면 파일도 닫음) |
 | `Space [` | 아래로 분할 |
 | `Space ]` | 오른쪽으로 분할 (현재 파일은 새 창으로, 원래 창엔 다른 파일) |
-| `Space \` | 현재 창 닫기 (마지막 창이면 종료) |
+| `Space \` | 분할 창 닫기(탭은 이웃 창으로 이동). 창이 하나면 현재 탭만 닫고, 마지막 탭이면 종료 |
 | `Space e` | 좌측 파일 탐색기 토글 |
 | `F3` / `Space t t` | 하단 셸 패널 토글 (현재 파일 폴더에서 시작) |
 | `Space t p` / `t v` / `t f` | terraform plan / validate / fmt (현재 파일 폴더) |
-| `Space t s` | 서버 접속 선택 (`~/.ssh/config` 의 Host → 하단 패널에서 ssh) |
-| (패널 안에서) `Esc` | 터미널 노멀 모드로 빠져나가기 |
+| (패널 안에서) `F4` | 터미널 노멀 모드로 빠져나가기 (`Esc`는 Claude/vi에 그대로 전달) |
 
 상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`만 켜면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다.
 

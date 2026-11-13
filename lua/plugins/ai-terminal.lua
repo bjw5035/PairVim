@@ -57,10 +57,14 @@ return {
       local Terminal = require("toggleterm.terminal").Terminal
 
       -- 이전 히스토리가 있으면 이어서, 없으면(첫 실행) 코드베이스 분석/가이드를 자동 요청
+      -- (git 저장소가 아닌 곳, 예를 들어 홈 폴더에서는 분석 요청을 보내지 않고 그냥 연다)
       local analyze_prompt = "이 디렉토리의 코드베이스를 분석해서 핵심 구조와 시작 가이드를 요약해줘"
+      local function fresh_cmd(bin)
+        return "{ git rev-parse --is-inside-work-tree >/dev/null 2>&1 && " .. bin .. " '" .. analyze_prompt .. "'; } || " .. bin
+      end
 
       local claude = Terminal:new({
-        cmd = "claude --continue || claude '" .. analyze_prompt .. "'",
+        cmd = "claude --continue || " .. fresh_cmd("claude"),
         direction = "vertical",
         size = panel_size,
         close_on_exit = false,
@@ -68,7 +72,7 @@ return {
       })
 
       local codex = Terminal:new({
-        cmd = "codex resume --last || codex '" .. analyze_prompt .. "'",
+        cmd = "codex resume --last || " .. fresh_cmd("codex"),
         direction = "vertical",
         size = panel_size,
         close_on_exit = false,
@@ -114,7 +118,8 @@ return {
       vim.api.nvim_create_autocmd("TermOpen", {
         pattern = "term://*",
         callback = function()
-          vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], { buffer = 0, desc = "터미널 노멀 모드로 빠져나가기" })
+          -- Esc 는 Claude Code(중단)·vi 가 쓰므로 가로채지 않는다. 노멀 모드로 나갈 때는 F4 (또는 기본 Ctrl-\ Ctrl-n)
+          vim.keymap.set("t", "<F4>", [[<C-\><C-n>]], { buffer = 0, desc = "터미널 노멀 모드로 빠져나가기" })
           vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], { buffer = 0, desc = "왼쪽 창으로 이동" })
           vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], { buffer = 0, desc = "아래 창으로 이동" })
           vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], { buffer = 0, desc = "위 창으로 이동" })
