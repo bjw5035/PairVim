@@ -6,12 +6,20 @@
 vim.keymap.set("n", "<leader>[", "<C-W>s", { desc = "아래로 분할" })
 vim.keymap.set("n", "<leader>]", "<C-W>v", { desc = "오른쪽으로 분할" })
 vim.keymap.set("n", "<leader>\\", function()
-  if #vim.api.nvim_tabpage_list_wins(0) > 1 then
+  -- which-key·오류 팝업 같은 떠 있는(floating) 창은 세지 않는다. 세면 마지막 창을 닫으려다 E444가 난다.
+  local normal = 0
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_config(w).relative == "" then
+      normal = normal + 1
+    end
+  end
+  if normal > 1 then
     vim.cmd("close")
   else
-    vim.notify("분할된 창이 하나뿐이라 닫을 게 없습니다 (nvim 전체 종료 방지)", vim.log.levels.WARN)
+    -- 마지막 창이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
+    vim.cmd("confirm qall")
   end
-end, { desc = "현재 창 닫기 (분할 한쪽 끄기)" })
+end, { desc = "현재 창 닫기 (마지막 창이면 종료)" })
 
 -- 탭(버퍼) 이동/닫기를 Shift+h/l 대신 더 직관적인 Tab 키로 (브라우저 탭 전환과 같은 느낌)
 vim.keymap.set("n", "<Tab>", "<cmd>bnext<cr>", { desc = "다음 탭(버퍼)" })

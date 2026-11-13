@@ -47,7 +47,7 @@ return {
           -- 자주 쓰는 것(★ 표시): 분할/닫기
           { "<leader>[", desc = "아래로 분할", icon = STAR },
           { "<leader>]", desc = "오른쪽으로 분할", icon = STAR },
-          { "<leader>\\", desc = "현재 창 닫기 (분할 한쪽 끄기)", icon = STAR },
+          { "<leader>\\", desc = "현재 창 닫기 (마지막 창이면 종료)", icon = STAR },
         },
       },
     },
