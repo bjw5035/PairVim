@@ -104,10 +104,12 @@ return {
         wk.add({ { "<leader>a", group = "AI 도구", icon = { icon = "★", color = "yellow" } } })
       end
 
+      -- 터미널 모드에서는 <leader>(스페이스)를 매핑하지 않는다: 스페이스를 칠 때마다 다음 키를 기다려
+      -- 입력이 지연되고, " ac" 같은 글자를 치면 패널이 토글된다. 터미널 안에서는 F2만 쓴다.
       vim.keymap.set({ "n", "t" }, "<F2>", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
-      vim.keymap.set({ "n", "t" }, "<leader>aa", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
-      vim.keymap.set({ "n", "t" }, "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
-      vim.keymap.set({ "n", "t" }, "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
+      vim.keymap.set("n", "<leader>aa", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
+      vim.keymap.set("n", "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
+      vim.keymap.set("n", "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
 
       vim.api.nvim_create_autocmd("TermOpen", {
         pattern = "term://*",

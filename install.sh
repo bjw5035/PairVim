@@ -91,7 +91,7 @@ place_config() {
     run git clone "$SELF_DIR" "$CONFIG_DIR"
     run git -C "$CONFIG_DIR" remote set-url origin "$REPO_URL"
   else
-    echo "PairVim 설정 클론 중... (비공개 저장소라 GitHub 로그인이 필요합니다: 사용자 이름 + 개인 액세스 토큰)"
+    echo "PairVim 설정 클론 중..."
     run mkdir -p "$(dirname "$CONFIG_DIR")"
     run git clone "$REPO_URL" "$CONFIG_DIR"
   fi
