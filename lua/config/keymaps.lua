@@ -7,6 +7,7 @@
 -- 열린 파일이 하나뿐이면 같은 파일이 두 창에 보인다.
 local function split_move(cmd)
   local cur = vim.api.nvim_get_current_buf()
+  local cursor = vim.api.nvim_win_get_cursor(0)
   local function usable(b)
     return b > 0 and b ~= cur and vim.fn.buflisted(b) == 1
   end
@@ -28,6 +29,8 @@ local function split_move(cmd)
     vim.cmd("buffer " .. other)
     vim.cmd("wincmd p")
   end
+  -- 새 창의 커서는 분할 직전 위치 그대로 둔다(자동 "마지막 위치 복원"이 끼어들어 움직이는 것을 막는다)
+  pcall(vim.api.nvim_win_set_cursor, 0, cursor)
 end
 vim.keymap.set("n", "<leader>[", function() split_move("split") end, { desc = "아래로 분할" })
 vim.keymap.set("n", "<leader>]", function() split_move("vsplit") end, { desc = "오른쪽으로 분할" })
