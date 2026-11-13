@@ -3,8 +3,34 @@
 -- Add any additional keymaps here
 
 -- 분할만 딱 두 개 키로 단순하게 (Space w 그룹은 분할/이동/창목록이 섞여있어 헷갈려서 분리)
-vim.keymap.set("n", "<leader>[", "<C-W>s", { desc = "아래로 분할" })
-vim.keymap.set("n", "<leader>]", "<C-W>v", { desc = "오른쪽으로 분할" })
+-- 분할: 현재 파일은 새 창에 두고, 원래 창에는 다른 파일(직전에 보던 파일)을 보여 준다(VS Code의 "분할로 이동"과 같다).
+-- 열린 파일이 하나뿐이면 같은 파일이 두 창에 보인다.
+local function split_move(cmd)
+  local cur = vim.api.nvim_get_current_buf()
+  local function usable(b)
+    return b > 0 and b ~= cur and vim.fn.buflisted(b) == 1
+  end
+  local other
+  local alt = vim.fn.bufnr("#")
+  if usable(alt) then
+    other = alt
+  else
+    for _, b in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+      if usable(b.bufnr) then
+        other = b.bufnr
+        break
+      end
+    end
+  end
+  vim.cmd(cmd)
+  if other then
+    vim.cmd("wincmd p")
+    vim.cmd("buffer " .. other)
+    vim.cmd("wincmd p")
+  end
+end
+vim.keymap.set("n", "<leader>[", function() split_move("split") end, { desc = "아래로 분할" })
+vim.keymap.set("n", "<leader>]", function() split_move("vsplit") end, { desc = "오른쪽으로 분할" })
 vim.keymap.set("n", "<leader>\\", function()
   -- which-key·오류 팝업 같은 떠 있는(floating) 창은 세지 않는다. 세면 마지막 창을 닫으려다 E444가 난다.
   local normal = 0
