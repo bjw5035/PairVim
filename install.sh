@@ -58,10 +58,18 @@ npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1 || true
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   [ -f "$rc" ] || continue
   grep -q 'npm-global/bin' "$rc" || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >>"$rc"
-  grep -q "alias pairvim=" "$rc" || echo "alias pairvim='nvim'" >>"$rc"
+  grep -q 'HOME/.local/bin' "$rc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$rc"
 done
 
-export PATH="$HOME/.npm-global/bin:$PATH"
+# 'pairvim'을 alias가 아니라 실제 실행 파일로 설치 - PATH상 어디서든, 어떤 쉘에서든 동작
+mkdir -p "$HOME/.local/bin"
+cat >"$HOME/.local/bin/pairvim" <<'EOF'
+#!/usr/bin/env bash
+exec nvim "$@"
+EOF
+chmod +x "$HOME/.local/bin/pairvim"
+
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 
 echo "== 설치 완료 =="
 echo "새 터미널을 열거나 'source ~/.zshrc' 실행 후 'pairvim' (또는 nvim) 으로 시작하세요."
