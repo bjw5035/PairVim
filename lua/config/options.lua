@@ -5,3 +5,8 @@
 -- PairVim: 전용 nvim 배포판 타이틀
 vim.o.title = true
 vim.o.titlestring = "PairVim — %t"
+
+-- 꾸밈
+vim.o.cursorline = true
+vim.o.scrolloff = 8
+vim.opt.fillchars = { vert = "│", horiz = "─", eob = " ", fold = " " }

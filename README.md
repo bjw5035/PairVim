@@ -132,12 +132,17 @@ echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bash
 | `Space a c` | Claude Code 패널 토글 |
 | `Space a x` | Codex 패널 토글 |
 | `Ctrl+h/j/k/l` | 창 이동 (AI 패널 안에서도 동작) |
-| `Tab` / `Shift+Tab` | 다음/이전 탭(버퍼) |
-| `Space b d` | 탭(버퍼) 닫기 |
+| `Tab` / `Shift+Tab` | 이 창의 다음/이전 탭 (탭은 분할 창마다 따로 있음, 마우스 클릭·✕도 됨) |
+| `Space b d` | 이 창에서 탭 닫기 (다른 창에도 없으면 파일도 닫음) |
 | `Space [` | 아래로 분할 |
-| `Space ]` | 오른쪽으로 분할 |
-| `Space \` | 현재 창 닫기 (분할 한쪽 끄기) |
+| `Space ]` | 오른쪽으로 분할 (현재 파일은 새 창으로, 원래 창엔 다른 파일) |
+| `Space \` | 현재 창 닫기 (마지막 창이면 종료) |
 | `Space e` | 좌측 파일 탐색기 토글 |
+| `F3` / `Space t t` | 하단 셸 패널 토글 (현재 파일 폴더에서 시작) |
+| `Space t p` / `t v` / `t f` | terraform plan / validate / fmt (현재 파일 폴더) |
+| `Space t s` | 서버 접속 선택 (`~/.ssh/config` 의 Host → 하단 패널에서 ssh) |
 | (패널 안에서) `Esc` | 터미널 노멀 모드로 빠져나가기 |
+
+상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`만 켜면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다.
 
 `Space w` 그룹(분할/이동/창목록이 섞여있음)은 헷갈리니 그냥 안 쓰는 걸 추천.

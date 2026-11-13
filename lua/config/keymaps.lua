@@ -134,3 +134,5 @@ local ok_wk_t, wk_t = pcall(require, "which-key")
 if ok_wk_t then
   wk_t.add({ { "<leader>t", group = "터미널/terraform", icon = { icon = "★", color = "yellow" } } })
 end
+
+vim.keymap.set("n", "<leader>ts", function() require("config.ssh").pick() end, { desc = "서버 접속 (ssh 선택)" })
