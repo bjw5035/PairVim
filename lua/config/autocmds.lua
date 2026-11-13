@@ -24,26 +24,5 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   end,
 })
 
--- 분할 창마다 위에 그 창의 파일 이름을 보여 준다(위쪽 탭줄은 열린 파일 전체 목록이라 창별 구분이 안 된다).
--- 파일 창이 2개 이상일 때만 표시하고, 탐색기·터미널·떠 있는 창에는 붙이지 않는다.
-local function update_winbars()
-  local file_wins = {}
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local cfg = vim.api.nvim_win_get_config(w)
-    local buf = vim.api.nvim_win_get_buf(w)
-    if cfg.relative == "" and vim.bo[buf].buftype == "" and vim.bo[buf].filetype ~= "snacks_dashboard" then
-      table.insert(file_wins, w)
-    end
-  end
-  local show = #file_wins > 1
-  for _, w in ipairs(file_wins) do
-    vim.wo[w].winbar = show and "%#WinBar# %t%( %m%) " or ""
-  end
-end
-
-vim.api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinEnter", "BufWinEnter", "BufWritePost", "TextChanged", "TextChangedI" }, {
-  group = vim.api.nvim_create_augroup("pairvim_winbar", { clear = true }),
-  callback = function()
-    vim.schedule(update_winbars)
-  end,
-})
+-- 창(분할)마다 자기 탭 목록을 갖는 탭줄
+require("config.pane-tabs")

@@ -1,11 +1,4 @@
--- 파일이 하나뿐이어도 위쪽 탭(버퍼 목록)을 항상 보여 준다. (LazyVim 기본은 2개 이상일 때만 표시)
+-- 위쪽 전역 탭줄(bufferline)은 쓰지 않는다. 대신 lua/config/pane-tabs.lua 가 창마다 자기 탭을 보여 준다.
 return {
-  {
-    "akinsho/bufferline.nvim",
-    opts = {
-      options = {
-        always_show_bufferline = true,
-      },
-    },
-  },
+  { "akinsho/bufferline.nvim", enabled = false },
 }

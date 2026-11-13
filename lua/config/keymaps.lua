@@ -27,6 +27,7 @@ local function split_move(cmd)
   if other then
     vim.cmd("wincmd p")
     vim.cmd("buffer " .. other)
+    require("config.pane-tabs").remove(vim.api.nvim_get_current_win(), cur)
     vim.cmd("wincmd p")
   end
   -- 새 창의 커서는 분할 직전 위치 그대로 둔다(자동 "마지막 위치 복원"이 끼어들어 움직이는 것을 막는다)
@@ -51,8 +52,14 @@ vim.keymap.set("n", "<leader>\\", function()
 end, { desc = "현재 창 닫기 (마지막 창이면 종료)" })
 
 -- 탭(버퍼) 이동/닫기를 Shift+h/l 대신 더 직관적인 Tab 키로 (브라우저 탭 전환과 같은 느낌)
-vim.keymap.set("n", "<Tab>", "<cmd>bnext<cr>", { desc = "다음 탭(버퍼)" })
-vim.keymap.set("n", "<S-Tab>", "<cmd>bprevious<cr>", { desc = "이전 탭(버퍼)" })
+-- 탭은 창마다 따로다: 이동·닫기는 현재 창의 탭 목록 안에서만 한다.
+vim.keymap.set("n", "<Tab>", function() require("config.pane-tabs").cycle(1) end, { desc = "다음 탭(이 창)" })
+vim.keymap.set("n", "<S-Tab>", function() require("config.pane-tabs").cycle(-1) end, { desc = "이전 탭(이 창)" })
+vim.keymap.set("n", "<S-l>", function() require("config.pane-tabs").cycle(1) end, { desc = "다음 탭(이 창)" })
+vim.keymap.set("n", "<S-h>", function() require("config.pane-tabs").cycle(-1) end, { desc = "이전 탭(이 창)" })
+vim.keymap.set("n", "]b", function() require("config.pane-tabs").cycle(1) end, { desc = "다음 탭(이 창)" })
+vim.keymap.set("n", "[b", function() require("config.pane-tabs").cycle(-1) end, { desc = "이전 탭(이 창)" })
+vim.keymap.set("n", "<leader>bd", function() require("config.pane-tabs").close() end, { desc = "이 창에서 탭 닫기" })
 
 -- Space h: 실제로 쓰는 단축키만 모아서 Space 메뉴(which-key) 안에서 바로 고르는 모음
 -- (별도 팝업 창 없이, Space를 눌렀을 때 보이는 그 목록 안에서 바로 보고 실행)
@@ -77,4 +84,53 @@ vim.keymap.set("n", "<leader>ha", feed("<F2>"), { desc = "AI 패널 선택 (Clau
 local ok_wk_h, wk_h = pcall(require, "which-key")
 if ok_wk_h then
   wk_h.add({ { "<leader>h", group = "단축키 모음", icon = { icon = "★", color = "yellow" } } })
+end
+
+-- 터미널(셸) 패널: 편집하던 화면 아래에 기존 셸을 그대로 쓴다. 나가지 않고 terraform 등을 돌린다.
+--   Space t t  셸 패널 토글(현재 파일이 있는 폴더에서 시작)   Space t p  terraform plan
+--   Space t v  terraform validate   Space t f  terraform fmt   Space t a  terraform apply는 일부러 만들지 않았다
+local shell_term
+local function shell_dir()
+  local f = vim.api.nvim_buf_get_name(0)
+  if f ~= "" and vim.bo.buftype == "" then
+    return vim.fn.fnamemodify(f, ":p:h")
+  end
+  return vim.fn.getcwd()
+end
+local function get_shell()
+  if not shell_term then
+    local Terminal = require("toggleterm.terminal").Terminal
+    shell_term = Terminal:new({
+      direction = "horizontal",
+      size = 16,
+      close_on_exit = true,
+      start_in_insert = true,
+      on_exit = function() shell_term = nil end,
+    })
+  end
+  return shell_term
+end
+local function shell_toggle()
+  local t = get_shell()
+  if not t:is_open() and not t.job_id then t.dir = shell_dir() end
+  t:toggle()
+end
+local function shell_run(cmd)
+  local dir = shell_dir()
+  local t = get_shell()
+  if not t:is_open() then
+    if not t.job_id then t.dir = dir end
+    t:open()
+  end
+  t:send("cd " .. vim.fn.shellescape(dir) .. " && " .. cmd)
+end
+vim.keymap.set("n", "<leader>tt", shell_toggle, { desc = "셸 패널 토글" })
+vim.keymap.set("t", "<F3>", function() if shell_term then shell_term:toggle() end end, { desc = "셸 패널 닫기" })
+vim.keymap.set("n", "<F3>", shell_toggle, { desc = "셸 패널 토글" })
+vim.keymap.set("n", "<leader>tp", function() shell_run("terraform plan") end, { desc = "terraform plan (이 파일 폴더)" })
+vim.keymap.set("n", "<leader>tv", function() shell_run("terraform validate") end, { desc = "terraform validate" })
+vim.keymap.set("n", "<leader>tf", function() shell_run("terraform fmt") end, { desc = "terraform fmt" })
+local ok_wk_t, wk_t = pcall(require, "which-key")
+if ok_wk_t then
+  wk_t.add({ { "<leader>t", group = "터미널/terraform", icon = { icon = "★", color = "yellow" } } })
 end
