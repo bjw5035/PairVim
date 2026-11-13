@@ -9,7 +9,6 @@ echo "== PairVim 설치 시작 =="
 
 install_apt_pkgs() {
   local pkgs=()
-  command -v nvim >/dev/null 2>&1 || pkgs+=(neovim)
   command -v git >/dev/null 2>&1 || pkgs+=(git)
   command -v node >/dev/null 2>&1 || pkgs+=(nodejs npm)
   command -v rg >/dev/null 2>&1 || pkgs+=(ripgrep)
@@ -27,7 +26,7 @@ install_apt_pkgs() {
 if command -v apt >/dev/null 2>&1; then
   install_apt_pkgs
 else
-  echo "apt가 없는 환경입니다. neovim / git / node+npm / ripgrep / fd 를 직접 설치한 뒤 다시 실행해주세요."
+  echo "apt가 없는 환경입니다. git / node+npm / ripgrep / fd 를 직접 설치한 뒤 다시 실행해주세요."
   exit 1
 fi
 
@@ -61,16 +60,12 @@ for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   grep -q 'HOME/.local/bin' "$rc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$rc"
 done
 
-# 'pairvim'을 alias가 아니라 실제 실행 파일로 설치 - PATH상 어디서든, 어떤 쉘에서든 동작
-mkdir -p "$HOME/.local/bin"
-cat >"$HOME/.local/bin/pairvim" <<'EOF'
-#!/usr/bin/env bash
-exec nvim "$@"
-EOF
-chmod +x "$HOME/.local/bin/pairvim"
-
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 
+# neovim/neovim 소스를 받아 PairVim 리브랜딩 패치를 적용하고 직접 빌드/설치
+# (apt의 범용 nvim이 아니라 'pairvim'이라는 내 전용 바이너리를 만드는 단계 - 몇 분 걸릴 수 있음)
+bash "$CONFIG_DIR/build-pairvim.sh"
+
 echo "== 설치 완료 =="
-echo "새 터미널을 열거나 'source ~/.zshrc' 실행 후 'pairvim' (또는 nvim) 으로 시작하세요."
+echo "새 터미널을 열거나 'source ~/.zshrc' 실행 후 'pairvim'으로 시작하세요."
 echo "처음 실행하면 플러그인과 codex/claude CLI가 자동으로 설치됩니다."
