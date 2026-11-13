@@ -17,12 +17,12 @@ end, { desc = "현재 창 닫기 (분할 한쪽 끄기)" })
 vim.keymap.set("n", "<Tab>", "<cmd>bnext<cr>", { desc = "다음 탭(버퍼)" })
 vim.keymap.set("n", "<S-Tab>", "<cmd>bprevious<cr>", { desc = "이전 탭(버퍼)" })
 
--- F1: 실제로 쓰는 단축키만 추린 개인 매뉴얼 (LazyVim 전체 단축키가 아니라 PairVim 전용 요약)
+-- Space h: 실제로 쓰는 단축키만 추린 개인 매뉴얼 (LazyVim 전체 단축키가 아니라 PairVim 전용 요약)
 local function show_cheatsheet()
   local lines = {
     "  PairVim 단축키",
     "",
-    "  F1          단축키 도움말 (지금 이 창)",
+    "  Space h     단축키 도움말 (지금 이 창)",
     "  F2          AI 패널 선택 (Claude / Codex)",
     "",
     "  Space f f   파일 찾기",
@@ -73,4 +73,4 @@ local function show_cheatsheet()
   vim.keymap.set("n", "<esc>", close, { buffer = buf })
 end
 
-vim.keymap.set("n", "<F1>", show_cheatsheet, { desc = "단축키 도움말" })
+vim.keymap.set("n", "<leader>h", show_cheatsheet, { desc = "단축키 도움말" })
