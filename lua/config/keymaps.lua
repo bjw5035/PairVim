@@ -13,6 +13,10 @@ vim.keymap.set("n", "<leader>\\", function()
   end
 end, { desc = "현재 창 닫기 (분할 한쪽 끄기)" })
 
+-- 탭(버퍼) 이동/닫기를 Shift+h/l 대신 더 직관적인 Tab 키로 (브라우저 탭 전환과 같은 느낌)
+vim.keymap.set("n", "<Tab>", "<cmd>bnext<cr>", { desc = "다음 탭(버퍼)" })
+vim.keymap.set("n", "<S-Tab>", "<cmd>bprevious<cr>", { desc = "이전 탭(버퍼)" })
+
 -- F1: 실제로 쓰는 단축키만 추린 개인 매뉴얼 (LazyVim 전체 단축키가 아니라 PairVim 전용 요약)
 local function show_cheatsheet()
   local lines = {
@@ -26,8 +30,8 @@ local function show_cheatsheet()
     "  Space /     텍스트 검색",
     "  Space e     파일 탐색기 토글",
     "",
-    "  Shift+h     이전 탭(버퍼)",
-    "  Shift+l     다음 탭(버퍼)",
+    "  Tab         다음 탭(버퍼)",
+    "  Shift+Tab   이전 탭(버퍼)",
     "  Space b d   탭(버퍼) 닫기",
     "",
     "  Space [     아래로 분할",
