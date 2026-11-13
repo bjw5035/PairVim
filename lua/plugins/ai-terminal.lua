@@ -47,8 +47,11 @@ return {
 
       local Terminal = require("toggleterm.terminal").Terminal
 
+      -- 이전 히스토리가 있으면 이어서, 없으면(첫 실행) 코드베이스 분석/가이드를 자동 요청
+      local analyze_prompt = "이 디렉토리의 코드베이스를 분석해서 핵심 구조와 시작 가이드를 요약해줘"
+
       local claude = Terminal:new({
-        cmd = "claude",
+        cmd = "claude --continue || claude '" .. analyze_prompt .. "'",
         direction = "vertical",
         size = 100,
         close_on_exit = false,
@@ -56,7 +59,7 @@ return {
       })
 
       local codex = Terminal:new({
-        cmd = "codex",
+        cmd = "codex resume --last || codex '" .. analyze_prompt .. "'",
         direction = "vertical",
         size = 100,
         close_on_exit = false,
