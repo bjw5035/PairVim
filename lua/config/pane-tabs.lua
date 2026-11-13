@@ -129,9 +129,18 @@ function _G.PairTabs(w)
   for _, b in ipairs(clean(w)) do
     local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ":t")
     if name == "" then name = "[이름 없음]" end
-    local hl = (b == cur) and "%#TabLineSel#" or "%#TabLine#"
-    local mod = vim.bo[b].modified and " ●" or ""
-    table.insert(parts, ("%s%%%d@v:lua.PairTabGo@ %s%s %%X%%%d@v:lua.PairTabClose@✕ %%X"):format(hl, b, esc(name), mod, b))
+    local active = b == cur
+    local icon = ""
+    local okm, mini = pcall(require, "mini.icons")
+    if okm then
+      local ic = mini.get("file", name)
+      if ic then icon = ic .. " " end
+    end
+    local hl = active and "%#TabLineSel#" or "%#TabLine#"
+    local bar = active and "%#PairTabAccent#▎" or "%#TabLine# "
+    local mod = vim.bo[b].modified and "%#PairTabModified# ●" or ""
+    table.insert(parts, ("%s%%%d@v:lua.PairTabGo@%s%s%s%s %%X%%#PairTabClose#%%%d@v:lua.PairTabClose@✕%%X%s "):format(
+      bar, b, hl, esc(icon .. name), mod, active and "%#TabLineSel#" or "", b, "%#TabLine#"))
   end
   return table.concat(parts) .. "%#TabLineFill#"
 end

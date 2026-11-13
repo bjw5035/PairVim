@@ -37,10 +37,38 @@ local function parse(path, hosts, depth)
   end
 end
 
+-- 접속 후보를 여러 곳에서 모은다: ~/.ssh/config, (WSL이면) Windows 쪽 .ssh/config, tailscale 피어
 function M.hosts()
-  local hosts = {}
-  parse(vim.fn.expand("~/.ssh/config"), hosts, 0)
-  return hosts
+  local hosts, sources = {}, {}
+  local function from_config(path, label)
+    if vim.uv.fs_stat(path) then
+      local before = #hosts
+      parse(path, hosts, 0)
+      if #hosts > before then table.insert(sources, label) end
+    end
+  end
+  from_config(vim.fn.expand("~/.ssh/config"), "~/.ssh/config")
+  for _, f in ipairs(vim.fn.glob("/mnt/c/Users/*/.ssh/config", false, true)) do
+    from_config(f, "Windows " .. f:match("/Users/([^/]+)/"))
+  end
+  if vim.fn.executable("tailscale") == 1 then
+    local ok, out = pcall(vim.fn.system, { "tailscale", "status", "--json" })
+    if ok and vim.v.shell_error == 0 then
+      local ok2, data = pcall(vim.json.decode, out)
+      if ok2 and type(data) == "table" and type(data.Peer) == "table" then
+        local before = #hosts
+        for _, peer in pairs(data.Peer) do
+          local name = (peer.DNSName or peer.HostName or ""):gsub("%.$", "")
+          if name ~= "" then
+            table.insert(hosts, { name = name, hostname = (peer.TailscaleIPs or {})[1], tag = "tailscale" })
+          end
+        end
+        if #hosts > before then table.insert(sources, "tailscale") end
+      end
+    end
+  end
+  table.sort(hosts, function(x, y) return x.name < y.name end)
+  return hosts, sources
 end
 
 local terms = {}
@@ -50,7 +78,7 @@ function M.connect(name)
   if not t then
     local Terminal = require("toggleterm.terminal").Terminal
     t = Terminal:new({
-      cmd = "ssh " .. vim.fn.shellescape(name),
+      cmd = "ssh " .. (name:find("%s") and name or vim.fn.shellescape(name)),
       direction = "horizontal",
       size = 20,
       close_on_exit = false,
@@ -64,21 +92,25 @@ function M.connect(name)
 end
 
 function M.pick()
-  local hosts = M.hosts()
-  if #hosts == 0 then
-    vim.notify("~/.ssh/config 에서 접속할 Host 를 찾지 못했습니다.", vim.log.levels.WARN)
-    return
-  end
-  vim.ui.select(hosts, {
-    prompt = "서버 접속 (ssh)",
+  local hosts, sources = M.hosts()
+  local items = vim.list_extend({}, hosts)
+  table.insert(items, { name = "직접 입력...", manual = true })
+  vim.ui.select(items, {
+    prompt = "서버 접속 (ssh)" .. (#sources > 0 and ("  ─ " .. table.concat(sources, ", ")) or "  ─ 등록된 Host 없음"),
     format_item = function(e)
-      local extra = {}
-      if e.user then table.insert(extra, e.user .. "@") end
+      if e.manual then return "✎ " .. e.name end
       local tail = (e.user and (e.user .. "@") or "") .. (e.hostname or "")
-      return e.name .. (tail ~= "" and ("   " .. tail) or "") .. (terms[e.name] and "   ● 열려 있음" or "")
+      return e.name .. (tail ~= "" and ("   " .. tail) or "") .. (e.tag and ("   [" .. e.tag .. "]") or "") .. (terms[e.name] and "   ● 열려 있음" or "")
     end,
   }, function(choice)
-    if choice then M.connect(choice.name) end
+    if not choice then return end
+    if choice.manual then
+      vim.ui.input({ prompt = "접속 대상 (예: user@host 또는 -p 22 user@host): " }, function(input)
+        if input and input ~= "" then M.connect(input) end
+      end)
+    else
+      M.connect(choice.name)
+    end
   end)
 end
 
