@@ -16,10 +16,12 @@
 Neovim 설치부터 PairVim 설정 적용까지 한 번에:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bjw5035/PairVim/main/install.sh | bash
+git clone https://github.com/bjw5035/PairVim.git ~/.config/nvim && bash ~/.config/nvim/install.sh
 ```
 
-(apt 기반 배포판/WSL 기준. 내부적으로 Neovim, git, node/npm, ripgrep, fd가 없으면 설치하고, `~/.config/nvim`에 이 레포를 클론하고, `pairvim` alias와 npm 전역 설치 경로까지 자동으로 잡아줍니다.)
+(저장소가 비공개라 `curl`로 직접 받을 수 없어서, `git clone`으로 받은 뒤 그 안의 설치 스크립트를 실행하는 방식입니다. `git clone` 과정에서 GitHub 로그인 창이 뜨면 로그인하면 됩니다.)
+
+apt 기반 배포판/WSL 기준으로, 내부적으로 Neovim, git, node/npm, ripgrep, fd가 없으면 설치하고, `pairvim` alias와 npm 전역 설치 경로까지 자동으로 잡아줍니다.
 
 설치 끝나면:
 

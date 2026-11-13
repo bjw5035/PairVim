@@ -31,17 +31,24 @@ else
   exit 1
 fi
 
-if [ -d "$CONFIG_DIR" ] && [ ! -d "$CONFIG_DIR/.git" ]; then
-  backup="$CONFIG_DIR.bak.$(date +%Y%m%d%H%M%S)"
-  echo "기존 nvim 설정을 $backup 으로 백업합니다"
-  mv "$CONFIG_DIR" "$backup"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ ! -d "$CONFIG_DIR" ]; then
-  echo "PairVim 설정 클론 중..."
-  git clone "$REPO_URL" "$CONFIG_DIR"
+if [ "$SCRIPT_DIR" = "$CONFIG_DIR" ]; then
+  # 이미 ~/.config/nvim 안에서(= git clone 된 상태로) 실행된 경우 - 클론 불필요
+  echo "$CONFIG_DIR 에서 바로 실행됨. 클론 단계 건너뜀."
 else
-  echo "$CONFIG_DIR 는 이미 PairVim 레포입니다. 건너뜀."
+  if [ -d "$CONFIG_DIR" ] && [ ! -d "$CONFIG_DIR/.git" ]; then
+    backup="$CONFIG_DIR.bak.$(date +%Y%m%d%H%M%S)"
+    echo "기존 nvim 설정을 $backup 으로 백업합니다"
+    mv "$CONFIG_DIR" "$backup"
+  fi
+
+  if [ ! -d "$CONFIG_DIR" ]; then
+    echo "PairVim 설정 클론 중... (비공개 저장소라 GitHub 로그인 창이 뜰 수 있음)"
+    git clone "$REPO_URL" "$CONFIG_DIR"
+  else
+    echo "$CONFIG_DIR 는 이미 PairVim 레포입니다. 건너뜀."
+  fi
 fi
 
 # npm 전역 설치를 sudo 없이 하기 위한 사용자 전용 prefix
