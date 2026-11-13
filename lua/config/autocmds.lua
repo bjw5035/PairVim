@@ -14,8 +14,12 @@ local function flatten_whichkey_icons_to_blue()
   end
 end
 
-flatten_whichkey_icons_to_blue()
+-- which-key 자체가 ColorScheme 이벤트에서 같은 그룹을 mini.icons 색으로 되돌려놓기 때문에,
+-- 그 처리가 끝난 다음 틱에 다시 덮어써야 실제로 파란색이 유지됨
+vim.schedule(flatten_whichkey_icons_to_blue)
 vim.api.nvim_create_autocmd("ColorScheme", {
   group = vim.api.nvim_create_augroup("pairvim_whichkey_colors", { clear = true }),
-  callback = flatten_whichkey_icons_to_blue,
+  callback = function()
+    vim.schedule(flatten_whichkey_icons_to_blue)
+  end,
 })
