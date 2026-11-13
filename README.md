@@ -90,7 +90,7 @@ source ~/.zshrc
 
 | 키 | 동작 |
 |---|---|
-| `Space h` | 단축키 도움말 (이 표를 nvim 안에서 바로 띄움) |
+| `Space h` | 단축키 모음 (별도 창 없이 Space 메뉴 안에서 바로 고름: f=파일찾기, r=최근파일, g=검색, e=탐색기, t=다음탭, b=탭닫기, s=아래분할, v=오른쪽분할, x=분할닫기, c=코드액션, a=AI패널) |
 | `F2` | Claude Code / Codex 패널 선택/토글 |
 | `Space a c` | Claude Code 패널 토글 |
 | `Space a x` | Codex 패널 토글 |
