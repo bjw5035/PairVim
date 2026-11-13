@@ -18,7 +18,8 @@ return {
       require("toggleterm").setup(opts)
 
       -- npm 전역 설치 경로가 PATH에 없는 새 환경에서도 codex/claude를 바로 찾도록 보정
-      local npm_bin = vim.fn.expand("~/.npm-global/bin")
+      local npm_prefix = vim.fn.expand("~/.npm-global")
+      local npm_bin = npm_prefix .. "/bin"
       if not string.find(vim.env.PATH or "", npm_bin, 1, true) then
         vim.env.PATH = npm_bin .. ":" .. (vim.env.PATH or "")
       end
@@ -26,6 +27,10 @@ return {
       -- 새 머신에서 이 설정을 받아 nvim을 처음 켰을 때, CLI가 없으면 자동으로 설치
       local function ensure_cli(bin, install_cmd)
         if vim.fn.executable(bin) == 1 then
+          return
+        end
+        if vim.fn.executable("npm") ~= 1 then
+          vim.notify(bin .. " CLI 자동 설치를 건너뜁니다: npm이 없습니다(node/npm 설치 후 다시 열어주세요)", vim.log.levels.WARN)
           return
         end
         vim.notify(bin .. " CLI 설치 중... (" .. table.concat(install_cmd, " ") .. ")", vim.log.levels.INFO)
@@ -45,9 +50,9 @@ return {
         })
       end
 
-      vim.fn.system("npm config set prefix " .. npm_bin:gsub("/bin$", ""))
-      ensure_cli("codex", { "npm", "install", "-g", "@openai/codex" })
-      ensure_cli("claude", { "npm", "install", "-g", "@anthropic-ai/claude-code" })
+      -- 전역 npm 설정(npm config)은 바꾸지 않고, 설치 명령에만 --prefix 를 지정한다
+      ensure_cli("codex", { "npm", "install", "-g", "--prefix", npm_prefix, "@openai/codex" })
+      ensure_cli("claude", { "npm", "install", "-g", "--prefix", npm_prefix, "@anthropic-ai/claude-code" })
 
       local Terminal = require("toggleterm.terminal").Terminal
 

@@ -10,33 +10,78 @@
 - 단축키 가이드(which-key) 상위 그룹명 한글화
 - Neovim을 apt로 설치하지 않고, 소스를 받아 실행 파일 이름/버전 문구를 "pairvim"/"PairVim"으로 바꾼 뒤 직접 빌드 (`build-pairvim.sh`, `pairvim-rebrand.patch`)
 
-## 새 PC에서 세팅하기
+## 설치
 
-### 빠른 설치 (추천)
+### 상황별 선택
 
-Neovim 소스를 받아 직접 빌드하는 것부터 PairVim 설정 적용까지 한 번에:
+| 상황 | 방법 |
+|---|---|
+| 처음 설치 (Neovim 설정이 없음) | 아래 **빠른 설치** |
+| 이미 LazyVim/Neovim 설정이 있음 (`~/.config/nvim` 존재) | 같은 **빠른 설치** — 설치 스크립트가 기존 설정을 이름 붙여 옮겨 두고(확인 후), 언제든 되돌릴 수 있음 |
+| apt가 없는 환경 (macOS, Fedora 등) | 스크립트는 지원하지 않음. **수동 설치**를 참고해 직접 설치 |
+
+### 빠른 설치 (처음이든 기존 설정이 있든 같은 방법)
 
 ```bash
-git clone https://github.com/bjw5035/PairVim.git ~/.config/nvim && bash ~/.config/nvim/install.sh
+git clone https://github.com/bjw5035/PairVim.git ~/pairvim-setup
+bash ~/pairvim-setup/install.sh --dry-run    # (선택) 무엇을 할지 미리 보기. 아무것도 바꾸지 않음
+bash ~/pairvim-setup/install.sh
 ```
 
-(저장소가 비공개라 `curl`로 직접 받을 수 없어서, `git clone`으로 받은 뒤 그 안의 설치 스크립트를 실행하는 방식입니다. `git clone` 과정에서 GitHub 로그인 창이 뜨면 로그인하면 됩니다.)
-
-apt 기반 배포판/WSL 기준으로, 내부적으로:
-- git, node/npm, ripgrep, fd 같은 기본 도구 설치
-- `neovim/neovim` 소스를 받아 `pairvim-rebrand.patch`를 적용(실행 파일 이름 `nvim`→`pairvim`, 버전 문구 `NVIM`→`PairVim`)하고 직접 빌드 — apt의 범용 Neovim이 아니라 진짜 내 이름의 바이너리가 만들어짐 (**빌드 도구 설치 + 컴파일로 몇 분 걸림**)
-- npm 전역 설치 경로까지 자동으로 잡아줌
+- 저장소가 비공개라 `git clone`에서 GitHub 로그인을 물으면 **사용자 이름 + 개인 액세스 토큰(PAT)** 을 넣습니다(비밀번호가 아님).
+- `~/.config/nvim`에 **PairVim이 아닌 기존 설정**이 있으면, 옮길 목록을 보여 주고 `[y/N]`로 확인한 뒤 `nvim-old-<시각>` 이름으로 옮깁니다.
+  - 옮기는 것: 설정(`~/.config/nvim`), 플러그인(`~/.local/share/nvim/lazy`), 상태(`~/.local/state/nvim`), 캐시(`~/.cache/nvim`)
+  - 옮기지 않는 것: `runtime`, `mason`(LSP 등 도구는 그대로 재사용)
+  - `.git`이 있어도 원격 주소가 PairVim이 아니면 기존 설정으로 취급합니다.
+- 이어서 (apt 기반 WSL/Ubuntu 기준):
+  - git, node/npm, ripgrep, fd 같은 기본 도구 설치 (`sudo` 비밀번호 필요)
+  - 받아 둔 클론을 `~/.config/nvim`으로 복제 (로그인을 다시 묻지 않음)
+  - `neovim/neovim` 소스를 받아 `pairvim-rebrand.patch`를 적용(실행 파일 이름 `nvim`→`pairvim`, 버전 문구 `NVIM`→`PairVim`)하고 직접 빌드 — 몇 분 걸림. apt의 범용 Neovim과 따로 `~/.local/bin/pairvim`으로 설치되며 기존 `nvim` 바이너리는 건드리지 않음
+  - codex/claude CLI를 sudo 없이 설치할 `~/.npm-global` 준비 (전역 `npm config`는 바꾸지 않음)
+- 옵션: `--dry-run`(계획만 출력), `--yes`(확인 생략), `--rollback`(되돌리기), `--help`
 
 설치 끝나면:
 
 ```bash
-source ~/.zshrc   # 또는 새 터미널 열기
-pairvim           # 또는 nvim
+source ~/.zshrc   # bash면 ~/.bashrc, 또는 새 터미널 열기
+pairvim --version | head -1   # "PairVim ..." 이 보이면 정상
+pairvim
 ```
 
-처음 실행하면 lazy.nvim이 플러그인을 설치하고, `codex`/`claude` CLI도 없으면 자동 설치됩니다. 메시지 다 지나갈 때까지 기다렸다가 아무 키나 누르면 끝.
+처음 실행하면 lazy.nvim이 플러그인을 설치하고, `codex`/`claude` CLI가 없으면 자동 설치됩니다(이미 있으면 건너뜀). 메시지 다 지나갈 때까지 기다렸다가 아무 키나 누르면 끝. 두 CLI의 로그인은 직접 합니다.
 
-### 수동 설치 (curl 스크립트를 못 쓰거나 직접 하나씩 하고 싶을 때)
+> **주의**: AI 패널(`Space a a`)을 처음 열면 열린 폴더의 "코드베이스 분석" 요청이 자동 실행됩니다. 민감한 자료가 있는 폴더에서는 처음 열지 마세요(빈 폴더에서 먼저 시험).
+
+### 되돌리기
+
+```bash
+bash ~/.config/nvim/install.sh --rollback
+```
+
+- 마지막 백업 기록(`~/.config/.pairvim-last-backup`)을 읽어, **PairVim 쪽**(설정·플러그인·상태·캐시)을 지우고 옛 설정을 제자리로 복원합니다. 지우기 전에 확인을 받습니다.
+- `pairvim` 실행 파일까지 지우려면: `rm -f ~/.local/bin/pairvim`
+- 설치 후에는 그냥 `nvim`도 `~/.config/nvim`(PairVim 설정)을 읽습니다. 옛 설정을 따로 켜려면 `NVIM_APPNAME=nvim-old-<시각> nvim` (백업 이름은 설치 마지막에 출력됨)
+
+### 업데이트
+
+```bash
+git -C ~/.config/nvim pull
+```
+
+`pairvim-rebrand.patch`가 바뀐 경우에만 다시 빌드: `rm ~/.local/bin/pairvim && bash ~/.config/nvim/build-pairvim.sh`
+
+### 문제 해결
+
+- **`destination path '~/.config/nvim' already exists`**: 예전 안내(`~/.config/nvim`에 바로 클론)로 하면 기존 설정이 있을 때 실패합니다. 위 **빠른 설치**(`~/pairvim-setup`에 클론)를 쓰세요.
+- **`패치 적용 실패 - neovim 소스 버전이 패치와 맞지 않습니다`**: 이미 쓰는 Neovim 버전(`nvim --version`)과 같은 태그로 맞춰 다시 실행합니다.
+  ```bash
+  rm -rf ~/.local/src/pairvim-neovim
+  PAIRVIM_NVIM_REF=v0.12.6 bash ~/.config/nvim/build-pairvim.sh
+  ```
+- **`codex` 자동 설치 실패**: `npm`이 없거나 네트워크 문제입니다. 직접: `npm install -g --prefix ~/.npm-global @openai/codex`
+- **로그인 창이 안 뜸/인증 실패**: 사용자 이름 `bjw5035` + 개인 액세스 토큰(PAT)을 넣습니다.
+
+### 수동 설치 (스크립트를 못 쓰거나 직접 하나씩 하고 싶을 때)
 
 #### 1. 필수 프로그램 설치
 
@@ -48,12 +93,15 @@ pairvim           # 또는 nvim
 | ripgrep, fd-find | 파일/텍스트 검색 (Telescope 등) | `sudo apt install ripgrep fd-find` |
 | 어떤 Nerd Font | 아이콘 깨짐 방지 (터미널 폰트로 지정) | [nerdfonts.com](https://www.nerdfonts.com/)에서 하나 받아서 터미널 설정에 적용 |
 
-#### 2. 이 설정 받기
-
-기존 `~/.config/nvim`이 있다면 먼저 백업:
+#### 2. 기존 설정 옮기기 (있을 때만)
 
 ```bash
-mv ~/.config/nvim ~/.config/nvim.bak
+ts=$(date +%Y%m%d%H%M%S); n=nvim-old-$ts
+mv ~/.config/nvim ~/.config/$n
+mkdir -p ~/.local/share/$n && mv ~/.local/share/nvim/lazy ~/.local/share/$n/lazy
+mv ~/.local/state/nvim ~/.local/state/$n
+mv ~/.cache/nvim ~/.cache/$n
+echo $n > ~/.config/.pairvim-last-backup     # --rollback 이 이 기록을 씁니다
 ```
 
 그 다음 이 레포를 그 자리에 클론:
@@ -69,22 +117,11 @@ bash ~/.config/nvim/build-pairvim.sh   # neovim 소스 클론 + 패치 + 빌드 
 pairvim
 ```
 
-처음 실행하면:
-- lazy.nvim이 자동으로 모든 플러그인(toggleterm, which-key 등) 설치
-- `codex`/`claude` CLI가 PATH에 없으면 자동으로 `npm install -g`로 설치 시도 (sudo 권한 문제로 실패하면 아래처럼 사용자 전용 npm 경로를 먼저 잡아줄 것)
-
-설치 중 메시지가 다 지나갈 때까지 기다린 뒤 아무 키나 누르면 끝.
-
-#### 4. (선택) npm 전역 설치가 권한 때문에 실패할 경우
+처음 실행하면 lazy.nvim이 플러그인을 설치하고, `codex`/`claude` CLI가 PATH에 없으면 `npm install -g --prefix ~/.npm-global`로 자동 설치를 시도합니다. `~/.npm-global/bin`을 PATH에 넣어 두세요:
 
 ```bash
-mkdir -p ~/.npm-global
-npm config set prefix "$HOME/.npm-global"
 echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bashrc
-source ~/.zshrc
 ```
-
-이후 nvim을 다시 열면 `codex`/`claude` 자동 설치가 정상적으로 진행됨.
 
 ## 단축키
 

@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCH_FILE="$SCRIPT_DIR/pairvim-rebrand.patch"
 NVIM_SRC_DIR="$HOME/.local/src/pairvim-neovim"
+NVIM_REF="${PAIRVIM_NVIM_REF:-stable}"   # 패치가 안 맞으면 PAIRVIM_NVIM_REF=v0.12.6 처럼 태그를 지정해 다시 실행
 PREFIX="$HOME/.local"
 
 echo "== PairVim(개인 Neovim 빌드) 시작 =="
@@ -45,8 +46,8 @@ install_build_deps() {
 install_build_deps
 
 if [ ! -d "$NVIM_SRC_DIR" ]; then
-  echo "neovim 소스 클론 중 (stable 브랜치)..."
-  git clone --depth 1 --branch stable https://github.com/neovim/neovim.git "$NVIM_SRC_DIR"
+  echo "neovim 소스 클론 중 ($NVIM_REF)..."
+  git clone --depth 1 --branch "$NVIM_REF" https://github.com/neovim/neovim.git "$NVIM_SRC_DIR"
 fi
 
 cd "$NVIM_SRC_DIR"
@@ -58,6 +59,7 @@ elif git apply --check "$PATCH_FILE" 2>/dev/null; then
   echo "PairVim 패치 적용 완료."
 else
   echo "패치 적용 실패 - neovim 소스 버전이 패치와 맞지 않습니다: $PATCH_FILE"
+  echo "해결: rm -rf \"$NVIM_SRC_DIR\" 후 PAIRVIM_NVIM_REF=v0.12.6 bash $0  (맞는 태그는 이미 쓰는 nvim --version 으로 확인)"
   exit 1
 fi
 
