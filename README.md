@@ -90,6 +90,7 @@ source ~/.zshrc
 
 | 키 | 동작 |
 |---|---|
+| `F1` | 단축키 도움말 (이 표를 nvim 안에서 바로 띄움) |
 | `F2` | Claude Code / Codex 패널 선택/토글 |
 | `Space a c` | Claude Code 패널 토글 |
 | `Space a x` | Codex 패널 토글 |
