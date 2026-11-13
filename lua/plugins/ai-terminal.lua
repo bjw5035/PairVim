@@ -96,7 +96,7 @@ return {
 
       local ok_wk, wk = pcall(require, "which-key")
       if ok_wk then
-        wk.add({ { "<leader>a", group = "AI 도구" } })
+        wk.add({ { "<leader>a", group = "AI 도구", icon = { icon = "★", color = "yellow" } } })
       end
 
       vim.keymap.set({ "n", "t" }, "<F2>", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })

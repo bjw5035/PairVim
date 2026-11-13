@@ -39,5 +39,5 @@ vim.keymap.set("n", "<leader>ha", feed("<F2>"), { desc = "AI 패널 선택 (Clau
 
 local ok_wk_h, wk_h = pcall(require, "which-key")
 if ok_wk_h then
-  wk_h.add({ { "<leader>h", group = "단축키 모음" } })
+  wk_h.add({ { "<leader>h", group = "단축키 모음", icon = { icon = "★", color = "yellow" } } })
 end
