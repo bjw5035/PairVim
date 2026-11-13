@@ -6,7 +6,7 @@ local KO_DESC = {
   ["Recent Files"] = "최근 파일",
   ["Config"] = "설정",
   ["Restore Session"] = "세션 복원",
-  ["Lazy Extras"] = "Lazy 추가 기능",
+  ["Lazy Extras"] = "확장 기능",
   ["Lazy"] = "플러그인 관리",
   ["Quit"] = "종료",
 }

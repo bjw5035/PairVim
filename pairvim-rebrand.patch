@@ -1,0 +1,39 @@
+diff --git a/src/nvim/CMakeLists.txt b/src/nvim/CMakeLists.txt
+index c87ceb2..e2db459 100644
+--- a/src/nvim/CMakeLists.txt
++++ b/src/nvim/CMakeLists.txt
+@@ -8,7 +8,7 @@ set_target_properties(nvim_bin
+   PROPERTIES
+   EXPORT_COMPILE_COMMANDS ON
+   ENABLE_EXPORTS TRUE
+-  OUTPUT_NAME nvim)
++  OUTPUT_NAME pairvim)
+ 
+ #-------------------------------------------------------------------------------
+ # Dependencies
+diff --git a/src/nvim/version.c b/src/nvim/version.c
+index 1282a53..4db9f78 100644
+--- a/src/nvim/version.c
++++ b/src/nvim/version.c
+@@ -45,7 +45,7 @@
+   "." STR(NVIM_VERSION_MINOR) "." STR(NVIM_VERSION_PATCH) \
+   NVIM_VERSION_PRERELEASE
+ #endif
+-#define NVIM_VERSION_LONG "NVIM " NVIM_VERSION_MEDIUM  // NOLINT(bugprone-suspicious-missing-comma)
++#define NVIM_VERSION_LONG "PairVim " NVIM_VERSION_MEDIUM  // NOLINT(bugprone-suspicious-missing-comma)
+ 
+ char *Versions[] = { "8.1", "8.2", "9.0", "9.1", "9.2" };
+ char *longVersion = NVIM_VERSION_LONG;
+@@ -4348,9 +4348,10 @@ static void do_intro_line(int row, char *mesg, bool colon, bool is_logo)
+   }
+ 
+   // Try highlighting full line:
+-  // - Version starts with "NVIM".
++  // - Version starts with "PairVim".
+   // - Separator line consists from ─ (UTF-8: E2 94 80).
+-  bool is_version = mesg[0] == 'N' && mesg[1] == 'V' && mesg[2] == 'I' && mesg[3] == 'M';
++  bool is_version = mesg[0] == 'P' && mesg[1] == 'a' && mesg[2] == 'i' && mesg[3] == 'r'
++                     && mesg[4] == 'V' && mesg[5] == 'i' && mesg[6] == 'm';
+   bool is_sep = utfc_ptr2len(mesg) == 3 && utf_ptr2char(mesg) == 0x2500;
+   if (is_version || is_sep) {
+     int clen = is_sep ? 3 : 1;
