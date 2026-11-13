@@ -1,9 +1,13 @@
+local function panel_size()
+  return math.floor(vim.o.columns * 0.35)
+end
+
 return {
   {
     "akinsho/toggleterm.nvim",
     version = "*",
     opts = {
-      size = 100,
+      size = panel_size,
       direction = "vertical",
       persist_size = true,
       close_on_exit = false,
@@ -53,7 +57,7 @@ return {
       local claude = Terminal:new({
         cmd = "claude --continue || claude '" .. analyze_prompt .. "'",
         direction = "vertical",
-        size = 100,
+        size = panel_size,
         close_on_exit = false,
         start_in_insert = true,
       })
@@ -61,7 +65,7 @@ return {
       local codex = Terminal:new({
         cmd = "codex resume --last || codex '" .. analyze_prompt .. "'",
         direction = "vertical",
-        size = 100,
+        size = panel_size,
         close_on_exit = false,
         start_in_insert = true,
       })
