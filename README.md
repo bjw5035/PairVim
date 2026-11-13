@@ -95,6 +95,8 @@ source ~/.zshrc
 | `Space a c` | Claude Code 패널 토글 |
 | `Space a x` | Codex 패널 토글 |
 | `Ctrl+h/j/k/l` | 창 이동 (AI 패널 안에서도 동작) |
+| `Tab` / `Shift+Tab` | 다음/이전 탭(버퍼) |
+| `Space b d` | 탭(버퍼) 닫기 |
 | `Space [` | 아래로 분할 |
 | `Space ]` | 오른쪽으로 분할 |
 | `Space \` | 현재 창 닫기 (분할 한쪽 끄기) |
