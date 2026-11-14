@@ -86,7 +86,7 @@ local function finish()
   if not ok then notify("플러그인 맞추기(:Lazy restore)에 실패했습니다. :Pair plugins 에서 확인하세요.", vim.log.levels.WARN) end
   M.behind = 0
   refresh_dash()
-  local ans = vim.fn.confirm("업데이트를 적용하려면 nvim 을 다시 시작해야 합니다.", "&지금 종료\n&나중에", 2)
+  local ans = vim.fn.confirm("업데이트를 적용하려면 nvim 을 다시 시작해야 합니다.", "&Quit 지금 종료\n&Later 나중에", 2)
   if ans == 1 then vim.cmd("confirm qall") end
 end
 
@@ -127,7 +127,7 @@ function M.update()
       if not l:find("lazy%-lock%.json$") then only_lock = false end
     end
     if only_lock then
-      local ans = vim.fn.confirm("lazy-lock.json 이 이 PC 에서 바뀌었습니다.\n플러그인 버전은 저장소 기준이라 되돌리고 업데이트할까요?", "&되돌리고 진행\n&취소", 2)
+      local ans = vim.fn.confirm("lazy-lock.json 이 이 PC 에서 바뀌었습니다.\n플러그인 버전은 저장소 기준이라 되돌리고 업데이트할까요?", "&Yes 되돌리고 진행\n&No 취소", 2)
       if ans ~= 1 then notify("취소했습니다.") return end
       git({ "checkout", "--", "lazy-lock.json" }, function(cc, _, ee)
         if cc ~= 0 then notify("되돌리지 못했습니다: " .. ee, vim.log.levels.ERROR) return end

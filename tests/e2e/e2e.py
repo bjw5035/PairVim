@@ -287,6 +287,13 @@ def scenarios_more():
     n.send(LEADER + "\\", 1.5); n.send("n", 2)
     check("수정 중 종료 → 저장 안 함(n) 선택하면 종료", not n.alive()); n.close()
 
+    # ── 수정 중인 탭 닫기(Space b d): 영문 단축키 S/D/C 로 답한다
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send("ichanged\x1b", 0.8)
+    n.send(LEADER + "bd", 1.5); n.send("c", 1.2)
+    check("수정 중 탭 닫기: c(Cancel) 이면 그대로", n.alive() and "b.tf" in n.kinds("file")[0]["tabs"], n.state())
+    n.send(LEADER + "bd", 1.5); n.send("d", 1.5)
+    check("수정 중 탭 닫기: d(Discard) 이면 버리고 닫힘", n.alive() and "b.tf" not in n.kinds("file")[0]["tabs"], n.state()); n.close()
+
     # ── 세션 복원: 인자 없이 켜면 창 배치·창별 탭이 돌아온다(탐색기·패널은 복원하지 않음)
     shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(LEADER + "]", 1.5); n.send(":e c.tf\r", 1); open_explorer(n); n.send(LEADER + "ac", 2.5)
@@ -676,6 +683,19 @@ def scenarios_update():
     n.q("execute('lua _G.__asked = 0; local c = vim.fn.confirm; vim.fn.confirm = function(m, ch, d) _G.__asked = _G.__asked + 1; if m:find(\"lazy\", 1, true) then return 1 end return 2 end')")
     n.send(":Pair update\r", 7)
     check("lock 만 수정: 되돌리고 업데이트 진행", os.path.exists(f"{cfg}/marker2.txt") and no_lua_error(n) and n.q("luaeval('_G.__asked')") != "0", n.errors())
+    n.close()
+
+    # 4-b) 실제 키로 확인창에 답하기(영문 단축키): lock 만 수정 → Y 로 진행
+    upstream_commit("marker3.txt")
+    open(f"{cfg}/lazy-lock.json", "a").write("\n")
+    n = start(cfgroot, "s4b"); n.drain(5)
+    n.send(":Pair update\r", 3)
+    scr = n.text()
+    if scr is not None: check("확인창에 영문 단축키(Y/N)가 보임", __import__("re").search(r"[(\[]Y[)\]]es", scr) is not None and __import__("re").search(r"[(\[]N[)\]]o", scr) is not None, scr[:600])
+    n.send("y", 8)
+    check("확인창에서 y: 되돌리고 업데이트 진행", os.path.exists(f"{cfg}/marker3.txt") and no_lua_error(n), n.errors())
+    n.send("l", 2)   # 재시작 확인창: L(나중에)
+    check("재시작 확인창에서 l(Later): nvim 유지", n.alive())
     n.close()
 
     # 5) 오프라인(원격 접속 불가): 조용히 넘어가고 오류 없음

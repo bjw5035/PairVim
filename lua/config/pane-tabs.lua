@@ -86,7 +86,7 @@ function M.close(w, b)
   b = b or vim.api.nvim_win_get_buf(w)
   if not vim.api.nvim_win_is_valid(w) or not is_tab_buf(b) then return end
   if vim.bo[b].modified and not in_other_windows(b, w) then
-    local ans = vim.fn.confirm(("저장하지 않은 변경이 있습니다: %s"):format(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ":t")), "&저장\n&버리고 닫기\n&취소", 3)
+    local ans = vim.fn.confirm(("저장하지 않은 변경이 있습니다: %s"):format(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ":t")), "&Save 저장\n&Discard 버리고 닫기\n&Cancel 취소", 3)
     if ans == 1 then
       vim.api.nvim_buf_call(b, function() vim.cmd("write") end)
     elseif ans ~= 2 then
