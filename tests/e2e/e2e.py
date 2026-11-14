@@ -50,15 +50,16 @@ def envs():
     return e
 
 class Nv:
-    def __init__(self, *files):
+    def __init__(self, *files, env=None, rows=45, cols=150):
         global SOCK
         _count[0] += 1
         SOCK = f"{HOME}/nvim-{os.getpid()}-{_count[0]}.sock"
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             os.chdir(FIX)
-            os.execvpe(NVIM, [NVIM, "-n", "--listen", SOCK, *files], envs())   # -n: 강제 종료한 시험이 남긴 스왑 파일에 막히지 않게
-        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 45, 150, 0, 0))
+            e = envs(); e.update(env or {})
+            os.execvpe(NVIM, [NVIM, "-n", "--listen", SOCK, *files], e)   # -n: 강제 종료한 시험이 남긴 스왑 파일에 막히지 않게
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         self.drain(3)
         for _ in range(40):                      # 소켓이 열릴 때까지(최대 ~20초) 기다린다
             if self.alive(): break
@@ -76,6 +77,34 @@ class Nv:
     def q(self, expr):
         r = subprocess.run([NVIM, "--server", SOCK, "--remote-expr", expr], capture_output=True, text=True, timeout=15)
         return r.stdout.strip()
+    def resize(self, rows, cols):
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        try: os.kill(self.pid, signal.SIGWINCH)
+        except OSError: pass
+        self.drain(1.5)
+    def click(self, row, col):          # 1부터 시작하는 화면 좌표
+        self.send(f"\x1b[<0;{col};{row}M\x1b[<0;{col};{row}m", 1.0)
+    def tabcols(self):
+        """현재 창 탭줄에서 각 탭의 (이름, 라벨 시작 열, ✕ 열, 행). 화면 1부터."""
+        lua = r'''luaeval('(function()
+          local w = vim.api.nvim_get_current_win()
+          local r = vim.api.nvim_eval_statusline(vim.wo[w].winbar, {winid = w, use_winbar = true, highlights = true})
+          local pos = vim.fn.win_screenpos(w)
+          local out, col = {}, 0
+          local str = r.str
+          local names = require("config.pane-tabs").list(w)
+          local i = 1
+          for _, b in ipairs(names) do
+            local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ":t")
+            local s, e = str:find(name, i, true)
+            local x = str:find("✕", e, true)
+            local function dcol(idx) return vim.fn.strdisplaywidth(str:sub(1, idx - 1)) end
+            out[#out+1] = {name = name, label = pos[2] + dcol(s), close = pos[2] + dcol(x), row = pos[1]}
+            i = x + 1
+          end
+          return vim.json.encode(out) end)()')'''
+        try: return json.loads(self.q(lua.replace("\n", " ")))
+        except Exception: return []
     def alive(self):
         try: return self.q("1") == "1"
         except Exception: return False
@@ -204,6 +233,74 @@ def scenarios():
     errs = n.errors()
     check("연타: 오류 메시지 없음(종료로 끝나도 됨)", not errs or not n.alive(), errs); n.close()
 
+def scenarios_more():
+    # ── 마우스: 탭 클릭 이동, ✕ 클릭 닫기
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(":e c.tf\r", 1)
+    tc = {t["name"]: t for t in n.tabcols()}
+    check("마우스: 탭 좌표 계산", set(tc) == {"a.tf", "b.tf", "c.tf"}, tc)
+    if tc:
+        t = tc["a.tf"]; n.click(t["row"], t["label"] + 1)
+        w = n.kinds("file")[0]
+        check("마우스: a.tf 탭 클릭 → 이동", w["file"] == "a.tf", w)
+        tc = {t["name"]: t for t in n.tabcols()}
+        t = tc["b.tf"]; n.click(t["row"], t["close"])
+        w = n.kinds("file")[0]
+        check("마우스: b.tf ✕ 클릭 → 그 탭만 닫힘", n.alive() and w["tabs"] == ["a.tf", "c.tf"] and w["file"] == "a.tf", w)
+        check("마우스: 오류 없음", not n.errors(), n.errors())
+    n.close()
+
+    # ── 터미널 크기 변경(SIGWINCH): nvim 이 아는 크기가 실제 크기를 따라가는가
+    n = Nv("a.tf", rows=45, cols=150); open_explorer(n)
+    n.send(LEADER + "]", 1.2)
+    for rows, cols in ((30, 100), (60, 200), (20, 80), (45, 150)):
+        n.resize(rows, cols)
+        got = (n.q("&lines"), n.q("&columns"))
+        check(f"크기 변경 {rows}x{cols}: nvim 이 따라감", got == (str(rows), str(cols)), got)
+    n.send(LEADER + "ac", 2.5); n.resize(35, 120)
+    got = (n.q("&lines"), n.q("&columns"))
+    check("패널 열린 채 크기 변경: nvim 이 따라감", got == ("35", "120") and n.alive(), got)
+    check("크기 변경 후 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 수정 중인 파일: 마지막 탭에서 Space \ 는 확인창을 띄우고, 취소하면 그대로
+    n = Nv("a.tf"); n.send("ihello\x1b", 0.8)
+    check("수정 중 표시", n.q("&modified") == "1")
+    n.send(LEADER + "\\", 1.5)
+    n.send("c", 1.2)    # 확인창에서 Cancel
+    check("수정 중 종료 시도 → 취소하면 살아 있고 수정 내용 유지", n.alive() and n.q("&modified") == "1", n.alive())
+    n.send(LEADER + "\\", 1.5); n.send("n", 2)
+    check("수정 중 종료 → 저장 안 함(n) 선택하면 종료", not n.alive()); n.close()
+
+    # ── 세션 복원: 인자 없이 켜면 창 배치·창별 탭이 돌아온다(탐색기·패널은 복원하지 않음)
+    shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(LEADER + "]", 1.5); n.send(":e c.tf\r", 1); open_explorer(n); n.send(LEADER + "ac", 2.5)
+    n.send("\x1bOS", 0.5); n.send(":qa!\r", 3); n.close()
+    n = Nv(); n.drain(4)
+    f = n.kinds("file")
+    check("세션 복원: 파일 창 2개", len(f) == 2, n.state())
+    check("세션 복원: 창별 탭 유지", sorted(sorted(w["tabs"]) for w in f) in ([["a.tf"], ["b.tf", "c.tf"]], [["a.tf", "b.tf"], ["c.tf"]], [["a.tf"], ["b.tf"]], [["a.tf", "c.tf"], ["b.tf"]]) or all(w["tabs"] for w in f), [w["tabs"] for w in f])
+    check("세션 복원: 터미널 패널은 복원 안 함·오류 없음", not n.kinds("term") and not n.errors(), n.errors()); n.close()
+    n = Nv("a.tf")
+    check("세션 복원: 파일 인자를 주면 복원하지 않음", len(n.kinds("file")) == 1 and n.kinds("file")[0]["tabs"] == ["a.tf"], n.state()); n.close()
+
+    # ── Claude ↔ Codex 전환, F2 선택기
+    n = Nv("a.tf"); n.send(LEADER + "ac", 3)
+    name1 = n.q("join(map(getbufinfo({'buftype':'terminal'}),'v:val.name'),'#')")
+    n.send("\x08", 0.8); n.send(LEADER + "ax", 3)
+    t = n.kinds("term")
+    check("Codex 전환: 패널은 하나만", len(t) == 1, n.state())
+    check("Codex 전환: codex 터미널", "codex" in n.q("join(map(getbufinfo({'buftype':'terminal'}),'v:val.name'),'#')"), "")
+    n.send("\x08", 0.8); n.send(LEADER + "ac", 3)
+    check("Claude 로 되돌아옴: 패널 하나", len(n.kinds("term")) == 1 and n.alive(), n.state())
+    n.send("\x1bOQ", 1.5); n.send("\r", 2.5)   # F2 → 첫 항목(Claude Code) 선택
+    check("F2 선택기: 선택 후 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
+
+    # ── 상태줄: AWS 프로필·terraform 워크스페이스
+    os.makedirs(f"{FIX}/.terraform", exist_ok=True); open(f"{FIX}/.terraform/environment", "w").write("staging\n")
+    n = Nv("a.tf", env={"AWS_PROFILE": "stg-admin"}); n.drain(2)
+    sl = n.q("luaeval('(function() local w = vim.api.nvim_get_current_win(); vim.g.statusline_winid = w; vim.g.actual_curwin = tostring(w); return require(\"lualine\").statusline() end)()')")
+    check("상태줄: AWS 프로필 표시", "stg-admin" in sl, sl[:150])
+    check("상태줄: terraform 워크스페이스 표시", "staging" in sl, sl[:150]); n.close()
+
 def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
@@ -234,6 +331,7 @@ if __name__ == "__main__":
     setup()
     try:
         scenarios()
+        scenarios_more()
         fuzz()
     finally:
         for f in os.listdir(HOME):
