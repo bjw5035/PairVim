@@ -50,7 +50,7 @@ bash ~/pairvim-setup/install.sh
   - 옮기지 않는 것: `runtime`, `mason`(LSP 등 도구는 그대로 재사용)
   - `.git`이 있어도 원격 주소가 PairVim이 아니면 기존 설정으로 취급합니다.
 - 이어서 (apt 기반 WSL/Ubuntu 기준):
-  - git, node/npm, ripgrep, fd 같은 기본 도구 설치 (`sudo` 비밀번호 필요)
+  - git, curl, ripgrep, fd 같은 기본 도구 설치 (`sudo` 비밀번호 필요), Node 18 이상이 없으면 사용자 폴더에 자동 설치(위 **Ubuntu에서 설치할 때 알아 둘 것** 참고)
   - 받아 둔 클론을 `~/.config/nvim`으로 복제 (로그인을 다시 묻지 않음)
   - `neovim/neovim` 소스를 받아 `pairvim-rebrand.patch`를 적용(실행 파일 이름 `nvim`→`pairvim`, 버전 문구 `NVIM`→`PairVim`)하고 직접 빌드 — 몇 분 걸림. apt의 범용 Neovim과 따로 `~/.local/bin/pairvim`으로 설치되며 기존 `nvim` 바이너리는 건드리지 않음
   - codex/claude CLI를 sudo 없이 설치할 `~/.npm-global` 준비 (전역 `npm config`는 바꾸지 않음)
@@ -70,7 +70,7 @@ pairvim
 
 ### Ubuntu에서 설치할 때 알아 둘 것
 
-- **Node 18 이상이 필요합니다.** Claude CLI 설치에 쓰입니다. `node -v`로 확인하세요. Ubuntu 22.04의 apt `nodejs`는 12버전이라 부족합니다(24.04는 18.19로 충분). 낮으면 [nvm](https://github.com/nvm-sh/nvm)이나 NodeSource로 올린 뒤 설치 스크립트를 다시 실행하세요(`node`가 이미 있으면 apt로 덮어쓰지 않습니다).
+- **Node 는 설치 스크립트가 알아서 챙깁니다.** Claude CLI 설치에 Node 18 이상이 필요한데, 없거나 낮으면(예: Ubuntu 22.04 의 apt 는 12버전) nodejs.org 공식 배포 파일(LTS 22.x)을 받아 **sudo 없이** `~/.local/node`에 설치합니다. sha256 해시를 검증하고, 맞지 않으면 설치하지 않으며, 이미 18 이상이면 건너뜁니다. 기존에 깔린 Node 는 건드리지 않고 PATH 만 앞에 둡니다(`~/.zshrc`/`~/.bashrc`에 한 줄 추가). nodejs.org 에 접속할 수 없으면(회사망 등) apt 로 대신 설치를 시도합니다. 다른 버전을 원하면 `NODE_MAJOR=24 bash ~/pairvim-setup/install.sh`.
 - 데스크탑 Ubuntu, 서버, WSL 모두 같은 방법입니다. CPU가 arm64(예: Apple Silicon 위의 Ubuntu VM)여도 소스 빌드라 동작해야 하지만, 빌드가 오래 걸립니다(arm64는 시험하지 못했습니다).
 - 터미널 폰트를 **Nerd Font**로 지정하세요(아이콘이 깨집니다).
 

@@ -131,5 +131,64 @@ T=$(mkhome); mkbuild "$T" 0
 ( export HOME="$T/home" PATH="$T/bin:/usr/bin:/bin"; bash "$HERE/build-pairvim.sh" ) >"$T/out.log" 2>&1
 grep -q "git clone --depth 1 --branch stable" "$T/calls.log"; ok "build-pairvim.sh: 태그 미지정 시 stable" $?
 
+# 16) Node 자동 설치(가짜 nodejs.org: file:// 로 받음, 실제 네트워크 없음)
+case "$(uname -m)" in x86_64|amd64) NARCH=x64 ;; aarch64|arm64) NARCH=arm64 ;; *) NARCH="" ;; esac
+if [ -n "$NARCH" ] && command -v sha256sum >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+  F=$(mkhome); NV="node-v22.99.0-linux-$NARCH"
+  mkdir -p "$F/pkg/$NV/bin" "$F/dist/latest-v22.x"
+  printf '#!/bin/sh\n[ "$1" = "-v" ] && echo v22.99.0 || echo node-stub\n' >"$F/pkg/$NV/bin/node"
+  printf '#!/bin/sh\necho 10.0.0\n' >"$F/pkg/$NV/bin/npm"; chmod +x "$F/pkg/$NV/bin/"*
+  ( cd "$F/pkg" && tar -czf "$F/dist/latest-v22.x/$NV.tar.gz" "$NV" )
+  ( cd "$F/dist/latest-v22.x" && sha256sum "$NV.tar.gz" >SHASUMS256.txt )
+  # 최소 PATH: 필요한 도구만 연결(시스템의 node 가 섞이지 않게). apt/sudo 는 호출만 기록하는 가짜
+  SHIM=$(mkhome); L=$(mkhome)
+  for b in curl tar gzip sha256sum grep sed head mkdir ln rm mktemp uname cat bash sh env dirname cut sort awk mv cp date git cmp; do
+    w=$(command -v "$b" 2>/dev/null); [ -n "$w" ] && [ -x "$w" ] && ln -s "$w" "$SHIM/$b"
+  done
+  printf '#!/bin/sh\necho "apt $*" >>"%s/calls.log"\n' "$L" >"$SHIM/apt"
+  printf '#!/bin/sh\necho "sudo $*" >>"%s/calls.log"\nexec "$@"\n' "$L" >"$SHIM/sudo"
+  printf '#!/bin/sh\necho "NVIM v0.12.6 (PairVim)"\n' >"$SHIM/pairvim"; chmod +x "$SHIM/apt" "$SHIM/sudo" "$SHIM/pairvim"
+  nodestub() { mkdir -p "$1"; printf '#!/bin/sh\necho %s\n' "$2" >"$1/node"; chmod +x "$1/node"; } # $2 = 출력할 버전 문자열
+  runnode() { # $1=HOME $2=PATH 앞부분 $3=NODE_DIST_BASE 나머지=함수
+    local h="$1" pp="$2" base="$3"; shift 3
+    ( export HOME="$h" PATH="$pp$SHIM" NODE_DIST_BASE="$base" YES=1 DRY="${DRY:-0}"; source "$HERE/install.sh"; "$@" )
+  }
+
+  H=$(mkhome); runnode "$H" "" "file://$F/dist" ensure_node >"$F/o1.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ -x "$H/.local/node/bin/node" ] && [ "$("$H/.local/node/bin/node" -v)" = v22.99.0 ]; ok "Node 없음: 사용자 폴더(~/.local/node)에 설치" $?
+  [ -x "$H/.local/node/bin/npm" ]; ok "Node 설치: npm 도 함께" $?
+  runnode "$H" "" "file://$F/dist" ensure_node >"$F/o1b.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ "$(readlink "$H/.local/node")" = "$H/.local/share/pairvim-node/v22.99.0" ]; ok "Node 설치 2회차: 멱등(링크 그대로)" $?
+
+  H=$(mkhome); nodestub "$F/old" v12.22.9
+  runnode "$H" "$F/old:" "file://$F/dist" ensure_node >"$F/o2.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ "$("$H/.local/node/bin/node" -v 2>/dev/null)" = v22.99.0 ] && [ "$(PATH="$F/old:$SHIM" node -v)" = v12.22.9 ]; ok "Node 12(낮음): 새로 설치하고 기존 것은 건드리지 않음" $?
+
+  H=$(mkhome); nodestub "$F/ok" v20.11.0
+  runnode "$H" "$F/ok:" "file:///nonexistent" ensure_node >"$F/o3.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ ! -e "$H/.local/node" ] && grep -q "이미 충분" "$F/o3.log"; ok "Node 20(충분): 받지 않고 건너뜀" $?
+
+  H=$(mkhome); : >"$L/calls.log"; BAD=$(mkhome); mkdir -p "$BAD/latest-v22.x"; cp "$F/dist/latest-v22.x/$NV.tar.gz" "$BAD/latest-v22.x/"
+  sed 's/^./0/' "$F/dist/latest-v22.x/SHASUMS256.txt" >"$BAD/latest-v22.x/SHASUMS256.txt"
+  runnode "$H" "" "file://$BAD" ensure_node >"$F/o4.log" 2>&1; RC=$?
+  [ ! -e "$H/.local/node" ] && grep -q "sha256" "$F/o4.log"; ok "해시 불일치: 설치하지 않음" $?
+  grep -q "apt install -y nodejs npm" "$L/calls.log"; ok "해시 불일치·Node 없음: apt 로 대체 설치 시도" $?
+
+  H=$(mkhome); : >"$L/calls.log"
+  runnode "$H" "" "file:///nonexistent" ensure_node >"$F/o5.log" 2>&1
+  [ ! -e "$H/.local/node" ] && grep -q "apt install -y nodejs npm" "$L/calls.log"; ok "네트워크 차단(받기 실패): apt 로 대체" $?
+
+  H=$(mkhome); DRY=1 runnode "$H" "" "file:///nonexistent" ensure_node >"$F/o6.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ ! -e "$H/.local/node" ] && grep -q "dry-run" "$F/o6.log"; ok "dry-run: 받지 않고 계획만 출력" $?
+
+  # 전체 설치: Node 없는 새 PC → rc 에 PATH 한 줄, 두 번 돌려도 중복 없음
+  H=$(mkhome); mkdir -p "$H/.config"; touch "$H/.zshrc" "$H/.bashrc"; : >"$L/calls.log"
+  if [ -d "$HERE/.git" ]; then
+    for i in 1 2; do ( export HOME="$H" PATH="$SHIM" NODE_DIST_BASE="file://$F/dist"; bash "$HERE/install.sh" --yes ) >"$F/full$i.log" 2>&1; RC=$?; done
+    [ "$RC" = 0 ] && [ "$("$H/.local/node/bin/node" -v)" = v22.99.0 ]; ok "전체 설치(Node 없는 새 PC): Node 자동 설치까지 완료" $?
+    [ "$(grep -c 'local/node/bin' "$H/.zshrc")" = 1 ] && [ "$(grep -c 'local/node/bin' "$H/.bashrc")" = 1 ]; ok "전체 설치: rc 에 Node PATH 한 줄씩(2회 실행해도 중복 없음)" $?
+  fi
+fi
+
 echo; echo "TOTAL $((PASS+FAIL)), FAIL $FAIL"
 exit $FAIL

@@ -21,6 +21,11 @@ SELF_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 YES="${YES:-0}"
 DRY="${DRY:-0}"
 
+# Node: Claude/Codex CLI 설치에 18 이상이 필요하다. 없거나 낮으면 sudo 없이 사용자 폴더(~/.local/node)에 설치한다.
+NODE_MAJOR="${NODE_MAJOR:-22}"                              # 받을 Node 메이저 버전(LTS)
+NODE_DIST_BASE="${NODE_DIST_BASE:-https://nodejs.org/dist}"  # (시험에서만 바꾼다)
+NODE_HOME="$HOME/.local/node"                               # 현재 버전을 가리키는 링크
+
 run() {
   if [ "$DRY" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi
 }
@@ -98,10 +103,77 @@ place_config() {
   fi
 }
 
+# node 의 메이저 버전(없으면 0)
+node_major() {
+  command -v node >/dev/null 2>&1 || { echo 0; return; }
+  local v; v="$(node -v 2>/dev/null)"; v="${v#v}"; v="${v%%.*}"
+  case "$v" in ''|*[!0-9]*) echo 0 ;; *) echo "$v" ;; esac
+}
+
+# nodejs.org 공식 배포 파일(.tar.gz)을 받아 sha256 으로 검증한 뒤 ~/.local/node 에 푼다(sudo 불필요).
+# 실패하면(네트워크 차단 등) 아무것도 바꾸지 않고 1 을 돌려준다.
+install_node_user() {
+  local arch dist tmp line sha file ver dest
+  case "$(uname -m)" in
+    x86_64 | amd64) arch=x64 ;;
+    aarch64 | arm64) arch=arm64 ;;
+    armv7l) arch=armv7l ;;
+    *) echo "이 CPU($(uname -m))용 Node 배포 파일을 몰라 직접 설치를 건너뜁니다."; return 1 ;;
+  esac
+  dist="$NODE_DIST_BASE/latest-v${NODE_MAJOR}.x"
+  if [ "$DRY" = 1 ]; then
+    echo "[dry-run] $dist 에서 linux-$arch 배포 파일을 받아 sha256 검증 후 $NODE_HOME 에 설치"
+    return 0
+  fi
+  command -v curl >/dev/null 2>&1 || { echo "curl 이 없어 Node 를 받을 수 없습니다."; return 1; }
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/pairvim-node.XXXXXX")" || return 1
+  if ! curl -fsSL "$dist/SHASUMS256.txt" -o "$tmp/SHASUMS256.txt"; then
+    echo "Node 배포 목록을 받지 못했습니다($dist)."; rm -rf "$tmp"; return 1
+  fi
+  line="$(grep -E " node-v[0-9.]+-linux-${arch}\.tar\.gz\$" "$tmp/SHASUMS256.txt" | head -1)"
+  if [ -z "$line" ]; then echo "배포 목록에서 linux-$arch 파일을 찾지 못했습니다."; rm -rf "$tmp"; return 1; fi
+  sha="${line%% *}"; file="${line##* }"
+  if ! curl -fsSL "$dist/$file" -o "$tmp/$file"; then
+    echo "Node 파일을 받지 못했습니다($file)."; rm -rf "$tmp"; return 1
+  fi
+  if ! ( cd "$tmp" && echo "$sha  $file" | sha256sum -c --quiet - ) >/dev/null 2>&1; then
+    echo "Node 파일의 sha256 이 목록과 다릅니다. 설치하지 않습니다."; rm -rf "$tmp"; return 1
+  fi
+  ver="${file#node-}"; ver="${ver%%-linux*}"
+  dest="$HOME/.local/share/pairvim-node/$ver"
+  if ! { mkdir -p "$dest" && tar -xzf "$tmp/$file" -C "$dest" --strip-components=1; }; then
+    echo "Node 압축을 풀지 못했습니다."; rm -rf "$tmp" "$dest"; return 1
+  fi
+  mkdir -p "$HOME/.local" && ln -sfn "$dest" "$NODE_HOME"
+  rm -rf "$tmp"
+  export PATH="$NODE_HOME/bin:$PATH"
+  echo "Node $(node -v) 설치 완료 ($NODE_HOME)"
+}
+
+# Node 18 이상을 보장한다: 이미 충분하면 건너뛰고, 아니면 사용자 폴더 설치 → 실패하면 apt 로 대체.
+ensure_node() {
+  local m; m="$(node_major)"
+  if [ "$m" -ge 18 ]; then
+    echo "Node v$m 이미 충분함(18 이상)"
+    return 0
+  fi
+  if [ "$m" = 0 ]; then echo "Node 가 없습니다. sudo 없이 사용자 폴더에 설치합니다."
+  else echo "Node v$m 은 낮습니다(18 이상 필요). sudo 없이 사용자 폴더에 새로 설치합니다(기존 것은 그대로 둠)."; fi
+  install_node_user && return 0
+  echo "직접 설치에 실패했습니다."
+  if [ "$m" = 0 ]; then
+    echo "apt 로 nodejs/npm 을 설치합니다(버전이 낮을 수 있음. Claude CLI 가 안 되면 nvm 등으로 올리세요)."
+    run sudo apt install -y nodejs npm
+  else
+    echo "기존 Node v$m 을 그대로 둡니다. Claude CLI 설치가 실패하면 Node 18 이상으로 올린 뒤 다시 실행하세요."
+  fi
+  return 0
+}
+
 install_apt_pkgs() {
   local pkgs=()
   command -v git >/dev/null 2>&1 || pkgs+=(git)
-  command -v node >/dev/null 2>&1 || pkgs+=(nodejs npm)
+  command -v curl >/dev/null 2>&1 || pkgs+=(curl)
   command -v rg >/dev/null 2>&1 || pkgs+=(ripgrep)
   { command -v fdfind >/dev/null 2>&1 || command -v fd >/dev/null 2>&1; } || pkgs+=(fd-find)
   if [ "${#pkgs[@]}" -gt 0 ]; then
@@ -147,16 +219,21 @@ install_all() {
   fi
   backup_existing
   install_apt_pkgs
+  ensure_node
   place_config
 
   # codex/claude CLI 를 sudo 없이 설치할 사용자 전용 경로. 전역 npm 설정(npm config)은 바꾸지 않는다.
   run mkdir -p "$HOME/.npm-global"
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     [ -f "$rc" ] || continue
+    if [ -e "$NODE_HOME/bin/node" ]; then
+      grep -q 'local/node/bin' "$rc" || echo 'export PATH="$HOME/.local/node/bin:$PATH"' >>"$rc"
+    fi
     grep -q 'npm-global/bin' "$rc" || { [ "$DRY" = 1 ] && echo "[dry-run] $rc 에 PATH 추가" || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >>"$rc"; }
     grep -q 'HOME/.local/bin' "$rc" || { [ "$DRY" = 1 ] && echo "[dry-run] $rc 에 PATH 추가" || echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$rc"; }
   done
   export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+  [ -e "$NODE_HOME/bin/node" ] && export PATH="$NODE_HOME/bin:$PATH"
 
   # neovim/neovim 소스를 받아 PairVim 리브랜딩 패치를 적용하고 직접 빌드/설치('pairvim' 실행 파일, 몇 분 걸릴 수 있음)
   if [ "$DRY" = 1 ]; then
