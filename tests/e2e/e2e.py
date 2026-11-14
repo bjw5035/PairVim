@@ -7,6 +7,10 @@
 시험은 "무엇이 일어나면 안 되는가"(불변식)를 확인한다. 고친 버그는 여기에 시나리오를 추가한다.
 """
 import os, pty, select, signal, subprocess, sys, time, json, shutil, fcntl, termios, struct
+try:
+    import pyte      # 있으면 화면 내용도 확인한다(없으면 해당 확인만 건너뜀)
+except ImportError:
+    pyte = None
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HOME = os.environ.get("PV_E2E_HOME", "/tmp/pairvim-e2e")
@@ -61,6 +65,8 @@ class Nv:
             e = envs(); e.update(env or {})
             os.execvpe(NVIM, [NVIM, "-n", "--listen", SOCK, *files], e)   # -n: 강제 종료한 시험이 남긴 스왑 파일에 막히지 않게
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        self.screen = pyte.Screen(cols, rows) if pyte else None
+        self.stream = pyte.ByteStream(self.screen) if pyte else None
         self.drain(3)
         for _ in range(40):                      # 소켓이 열릴 때까지(최대 ~20초) 기다린다
             if self.alive(): break
@@ -71,7 +77,9 @@ class Nv:
         while time.time() < end:
             r, _, _ = select.select([self.fd], [], [], 0.1)
             if r:
-                try: os.read(self.fd, 65536)
+                try:
+                    data = os.read(self.fd, 65536)
+                    if self.stream: self.stream.feed(data)
                 except OSError: return
     def send(self, s, t=0.7):
         os.write(self.fd, s.encode()); self.drain(t)
@@ -106,6 +114,8 @@ class Nv:
           return vim.json.encode(out) end)()')'''
         try: return json.loads(self.q(lua.replace("\n", " ")))
         except Exception: return []
+    def text(self):
+        return "\n".join(l.rstrip() for l in self.screen.display) if self.screen else None
     def rss_mb(self):
         try:
             for l in open(f"/proc/{self.pid}/status"):
@@ -611,6 +621,76 @@ def scenarios_env():
     check("옵션: mouse 사용(탭 클릭에 필요)", "a" in n.q("&mouse") or "n" in n.q("&mouse"), n.q("&mouse"))
     n.close()
 
+def scenarios_update():
+    """:Pair update / 시작 화면 u / 시작 시 확인: 가짜 원격(bare)과 클론으로 pull 흐름을 시험한다."""
+    root = f"{HOME}/upd"; shutil.rmtree(root, ignore_errors=True); os.makedirs(root)
+    g = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", cwd, *a], capture_output=True, text=True)
+    bare, seed, work = f"{root}/origin.git", f"{root}/seed", f"{root}/work"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", bare])
+    shutil.copytree(REPO, seed, ignore=shutil.ignore_patterns(".git", "e2e", "__pycache__"))
+    g(seed, "init", "-q", "-b", "main"); g(seed, "add", "-A"); g(seed, "commit", "-qm", "seed"); g(seed, "remote", "add", "origin", bare); g(seed, "push", "-q", "-u", "origin", "main")
+    def fresh(name):
+        cfgroot = f"{root}/{name}"; os.makedirs(cfgroot)
+        g(cfgroot, "clone", "-q", bare, "nvim")
+        return cfgroot, f"{cfgroot}/nvim"
+    def upstream_commit(fname, text="x\n"):
+        if not os.path.isdir(work): subprocess.run(["git", "clone", "-q", bare, work])
+        g(work, "pull", "-q"); open(f"{work}/{fname}", "w").write(text); g(work, "add", "-A"); g(work, "commit", "-qm", f"add {fname}"); g(work, "push", "-q")
+    def start(cfgroot, state):
+        os.makedirs(f"{root}/{state}", exist_ok=True)
+        return Nv(env={"XDG_CONFIG_HOME": cfgroot, "XDG_STATE_HOME": f"{root}/{state}"})
+    def beh(n): return n.q("luaeval('require(\"config.pair\").behind == nil and -1 or require(\"config.pair\").behind')")
+    def no_lua_error(n): return n.alive() and not [e for e in n.errors() if "E5108" in e or "stack traceback" in e]
+
+    # 1) 최신 상태: 시작 화면에 u 항목, 새 커밋 표시 없음
+    cfgroot, cfg = fresh("c1"); n = start(cfgroot, "s1"); n.drain(6)
+    check("시작 화면: PairVim 업데이트 항목 존재", n.q("luaeval('require(\"config.pair\").dash_entry.key')") == "u")
+    scr = n.text()
+    if scr is not None: check("시작 화면: 'PairVim 업데이트' 글자가 보임", "PairVim 업데이트" in scr, scr[-300:])
+    check("시작 시 확인(최신): 뒤처짐 0", beh(n) == "0", beh(n))
+    check("시작 화면 기존 항목 유지(파일 찾기 f 등)", "파일 찾기" in (n.text() or "파일 찾기"), "")
+    n.close()
+
+    # 2) 새 커밋이 있으면 시작 시 감지하고 표시, u 로 받는다
+    upstream_commit("marker1.txt")
+    n = start(cfgroot, "s2"); n.drain(7)
+    check("시작 시 확인: 새 커밋 1개 감지", beh(n) == "1", beh(n))
+    scr = n.text()
+    if scr is not None: check("시작 화면: 새 커밋 개수가 보임", "새 커밋 1개" in scr, scr[-300:])
+    n.q("execute('lua vim.fn.confirm = function() return 2 end')")   # 재시작 확인창은 '나중에'
+    n.send("u", 6)
+    check("u 로 업데이트: 파일이 반영됨", os.path.exists(f"{cfg}/marker1.txt"))
+    check("u 로 업데이트: 뒤처짐 0·살아 있음·오류 없음", beh(n) == "0" and no_lua_error(n), n.errors())
+    n.close()
+
+    # 3) 로컬 수정이 있으면 받지 않고 중단
+    upstream_commit("marker2.txt")
+    open(f"{cfg}/README.md", "a").write("\n로컬 수정\n")
+    n = start(cfgroot, "s3"); n.drain(5); n.send(":Pair update\r", 5)
+    check("로컬 수정 있음: 업데이트 중단(파일 안 받음)", not os.path.exists(f"{cfg}/marker2.txt") and no_lua_error(n), n.errors())
+    n.close(); g(cfg, "checkout", "--", "README.md")
+
+    # 4) lazy-lock.json 만 바뀐 경우: 되돌리기에 동의하면 진행
+    open(f"{cfg}/lazy-lock.json", "a").write("\n")
+    n = start(cfgroot, "s4"); n.drain(5)
+    n.q("execute('lua _G.__asked = 0; local c = vim.fn.confirm; vim.fn.confirm = function(m, ch, d) _G.__asked = _G.__asked + 1; if m:find(\"lazy\", 1, true) then return 1 end return 2 end')")
+    n.send(":Pair update\r", 7)
+    check("lock 만 수정: 되돌리고 업데이트 진행", os.path.exists(f"{cfg}/marker2.txt") and no_lua_error(n) and n.q("luaeval('_G.__asked')") != "0", n.errors())
+    n.close()
+
+    # 5) 오프라인(원격 접속 불가): 조용히 넘어가고 오류 없음
+    g(cfg, "remote", "set-url", "origin", f"{root}/nonexistent.git")
+    n = start(cfgroot, "s5"); n.drain(7)
+    check("오프라인: 시작 시 확인이 조용히 실패(오류 없음)", no_lua_error(n) and beh(n) == "-1", (beh(n), n.errors()))
+    n.send(":Pair update\r", 4)
+    check("오프라인: :Pair update 가 오류로 끝나지만 nvim 은 정상", no_lua_error(n), n.errors())
+    n.send(":Pair status\r", 2); n.send(":Pair log\r", 2); n.send(":Pair 이상한것\r", 1.5)
+    check(":Pair status/log/알 수 없는 하위 명령: 오류 없음", no_lua_error(n), n.errors()); n.close()
+
+    # 6) git 저장소가 아닌 설정(.git 없음): 안내만 하고 오류 없음
+    n = Nv("a.tf"); n.drain(2); n.send(":Pair update\r", 2); n.send(":Pair check\r", 2); n.send(":Pair\r", 2)
+    check("git 저장소 아님: :Pair 명령들이 안내만 하고 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e], n.errors()); n.close()
+
 def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
@@ -644,6 +724,7 @@ if __name__ == "__main__":
         scenarios_more()
         scenarios_audit()
         scenarios_env()
+        scenarios_update()
         fuzz()
     finally:
         for f in os.listdir(HOME):

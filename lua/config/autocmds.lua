@@ -84,3 +84,6 @@ vim.api.nvim_create_autocmd("WinClosed", {
     end)
   end,
 })
+
+-- PairVim 관리 명령(:Pair)과 시작 시 업데이트 확인
+require("config.pair").setup()

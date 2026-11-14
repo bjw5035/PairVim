@@ -64,9 +64,22 @@ bash ~/.config/nvim/install.sh --rollback
 
 ### 업데이트
 
-```bash
-git -C ~/.config/nvim pull
-```
+명령어 없이: nvim 시작 화면에서 **`u` (PairVim 업데이트)** 를 누릅니다. 켤 때 새 커밋이 있는지 조용히 확인해서, 있으면 항목에 `● 새 커밋 N개`가 붙습니다(네트워크가 안 되면 아무 말 없이 넘어감).
+받은 뒤 플러그인을 `lazy-lock.json` 버전에 맞추고, 적용하려면 nvim 을 다시 켜라고 묻습니다.
+
+nvim 안의 `:Pair` 명령도 같은 일을 합니다.
+
+| 명령 | 동작 |
+|---|---|
+| `:Pair update` | 설정을 `git pull --ff-only` 로 받고 플러그인을 잠금 파일에 맞춤 |
+| `:Pair check` | 새 커밋이 있는지만 확인(받지 않음) |
+| `:Pair status` / `:Pair log` | 상태 / 최근 커밋 |
+| `:Pair restore` | 플러그인을 잠금 파일에 맞춤(`:Lazy restore`) |
+| `:Pair plugins` / `:Pair health` | 플러그인 화면(`:Lazy`) / 상태 점검 |
+
+- 이 PC 에서 설정 파일을 고쳤으면 업데이트를 **중단**하고 어떤 파일인지 알려 줍니다(`lazy-lock.json` 만 바뀐 경우는 되돌리고 진행할지 묻습니다).
+- 플러그인 버전은 저장소의 `lazy-lock.json` 이 정합니다. 각 PC 에서 `:Lazy update` 는 하지 않고, 올릴 때는 한 곳에서 업데이트·시험한 뒤 잠금 파일을 커밋합니다.
+- 터미널에서 직접 하려면: `git -C ~/.config/nvim pull --ff-only`
 
 `pairvim-rebrand.patch`가 바뀐 경우에만 다시 빌드: `rm ~/.local/bin/pairvim && bash ~/.config/nvim/build-pairvim.sh`
 
