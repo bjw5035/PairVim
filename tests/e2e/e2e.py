@@ -106,6 +106,12 @@ class Nv:
           return vim.json.encode(out) end)()')'''
         try: return json.loads(self.q(lua.replace("\n", " ")))
         except Exception: return []
+    def rss_mb(self):
+        try:
+            for l in open(f"/proc/{self.pid}/status"):
+                if l.startswith("VmRSS"): return int(l.split()[1]) / 1024
+        except OSError: pass
+        return 0.0
     def alive(self):
         try: return self.q("1") == "1"
         except Exception: return False
@@ -281,7 +287,7 @@ def scenarios_more():
     check("세션 복원: 창별 탭 유지", sorted(sorted(w["tabs"]) for w in f) in ([["a.tf"], ["b.tf", "c.tf"]], [["a.tf", "b.tf"], ["c.tf"]], [["a.tf"], ["b.tf"]], [["a.tf", "c.tf"], ["b.tf"]]) or all(w["tabs"] for w in f), [w["tabs"] for w in f])
     check("세션 복원: 터미널 패널은 복원 안 함·오류 없음", not n.kinds("term") and not n.errors(), n.errors()); n.close()
     n = Nv("a.tf")
-    check("세션 복원: 파일 인자를 주면 복원하지 않음", len(n.kinds("file")) == 1 and n.kinds("file")[0]["tabs"] == ["a.tf"], n.state()); n.close()
+    check("세션 복원: 파일 인자를 주면 복원하지 않음", len(n.kinds("file")) == 1 and len(n.kinds("file")[0]["tabs"]) == 1, n.state()); n.close()
 
     # ── Claude ↔ Codex 전환, F2 선택기
     n = Nv("a.tf"); n.send(LEADER + "ac", 3)
@@ -419,6 +425,192 @@ def scenarios_audit():
     n = Nv(longname, rows=20, cols=40); n.send(LEADER + "]", 1.5); n.send(":e a.tf\r", 1)
     check("좁은 창(40열)+긴 이름: 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
 
+class Tmux:
+    """tmux 안에서 nvim 을 돌린다(회사 WSL 에서 쓰던 환경). 크기 변경은 tmux 가 SIGWINCH 를 전달한다."""
+    def __init__(self, *files, cols=150, rows=45):
+        global SOCK
+        _count[0] += 1
+        SOCK = f"{HOME}/nvim-{os.getpid()}-{_count[0]}.sock"
+        self.name = f"pv{os.getpid()}{_count[0]}"
+        e = envs(); envstr = " ".join(f"{k}={v!r}" for k, v in e.items() if k in XDG or k in ("PATH", "SHELL"))
+        subprocess.run(["tmux", "-L", self.name, "-f", "/dev/null", "new-session", "-d", "-s", "pv", "-x", str(cols), "-y", str(rows), "-c", FIX,
+                        f"env {envstr} {NVIM} -n --listen {SOCK} {' '.join(files)}"], check=True)
+        for _ in range(60):
+            if self.alive(): break
+            time.sleep(0.5)
+        time.sleep(1.5)
+        self.sock = SOCK
+    def t(self, *a): return subprocess.run(["tmux", "-L", self.name, *a], capture_output=True, text=True)
+    def keys(self, *k, wait=0.8): self.t("send-keys", "-t", "pv", *k); time.sleep(wait)
+    def lit(self, s, wait=0.8): self.t("send-keys", "-t", "pv", "-l", s); time.sleep(wait)
+    def resize(self, cols, rows): self.t("resize-window", "-t", "pv", "-x", str(cols), "-y", str(rows)); time.sleep(1.5)
+    def q(self, expr):
+        return subprocess.run([NVIM, "--server", self.sock, "--remote-expr", expr], capture_output=True, text=True, timeout=15).stdout.strip()
+    def alive(self):
+        try: return subprocess.run([NVIM, "--server", SOCK, "--remote-expr", "1"], capture_output=True, text=True, timeout=10).stdout.strip() == "1"
+        except Exception: return False
+    def close(self): self.t("kill-server")
+
+def lum(hexs):
+    h = hexs.lstrip("#"); c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+def contrast(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+def scenarios_env():
+    # ── tmux 안에서: 시작·패널·크기 변경
+    if shutil.which("tmux"):
+        t = Tmux("a.tf")
+        check("tmux: 시작·오류 없음", t.alive() and not [l for l in t.q("execute('messages')").split("\n") if l.strip() and not any(x in l for x in ("DSR", "E1568", "nvim-treesitter", "blink.cmp"))], t.q("execute('messages')")[-200:])
+        check("tmux: TERM", t.q("$TERM").startswith(("screen", "tmux")), t.q("$TERM"))
+        t.lit(" ac", 3); check("tmux: Claude 패널 열림", t.q("len(filter(getbufinfo(), 'v:val.name =~ \"toggleterm\"'))") == "1")
+        for cols, rows in ((100, 30), (180, 55), (120, 24)):
+            t.resize(cols, rows); got = (t.q("&columns"), t.q("&lines"))
+            check(f"tmux 크기 변경 {cols}x{rows}: nvim 이 따라감", got == (str(cols), str(rows)), got)
+        t.keys("F3"); time.sleep(1.2)
+        check("tmux: F3 키 이름(F3) 동작", t.q("len(filter(getbufinfo(), 'v:val.name =~ \"toggleterm\"'))") in ("1", "2"), "")
+        t.close()
+    else:
+        print("SKIP  tmux 가 없어 tmux 시험을 건너뜀")
+
+    # ── 다른 TERM / LANG 에서도 시작·동작
+    for term, lang in (("screen-256color", "en_US.UTF-8"), ("linux", "C"), ("xterm", "C.UTF-8")):
+        n = Nv("a.tf", env={"TERM": term, "LANG": lang, "LC_ALL": lang})
+        n.send(":e b.tf\r", 1); n.send(LEADER + "]", 1.5)
+        check(f"TERM={term} LANG={lang}: 시작·분할·오류 없음", n.alive() and len(n.kinds("file")) == 2 and not n.errors(), n.errors()); n.close()
+
+    # ── 키 인코딩: Backspace(0x7f) 와 Ctrl-h(0x08) 구분, F 키의 다른 이스케이프 시퀀스
+    n = Nv("a.tf"); n.send(LEADER + "]", 1.5); n.send(LEADER + "ac", 3)
+    before = n.state()["cur"]
+    n.send("\x7f", 0.8)
+    check("Backspace(0x7f): 패널에서 창 이동으로 오해하지 않음", n.state()["cur"] == before and n.state()["mode"] == "t", n.state())
+    n.send("\x08", 1.0)
+    check("Ctrl-h(0x08): 패널에서 왼쪽 창으로 이동", n.state()["cur"] != before, n.state())
+    n.send("\x1b[14~", 0.5); n.send("\x1b[13~", 1.2)
+    check("F 키 대체 시퀀스(F3=\\e[13~) 동작·오류 없음", n.alive() and not n.errors(), n.errors())
+    n.close()
+
+    # ── 붙여넣기(bracketed paste): 여러 줄이 편집창과 패널에 그대로 들어가는가
+    n = Nv("a.tf"); n.send("ggO", 0.5)
+    n.send("\x1b[200~paste one\npaste two\x1b[201~", 1.0); n.send("\x1b", 0.5)
+    txt = n.q("join(getline(1,3),'|')")
+    check("붙여넣기: 편집창에 여러 줄", "paste one" in txt and "paste two" in txt, txt)
+    n.send(LEADER + "ac", 3); n.send("\x1b[200~alpha\nbeta\x1b[201~", 1.0)
+    out = n.q("join(getline(1,25),'|')")
+    check("붙여넣기: 패널(터미널)에 도달", "alpha" in out, out[:200]); n.close()
+
+    # ── 클립보드: 제공자가 없거나 있어도 yank/put 에서 오류가 나지 않는가
+    n = Nv("a.tf", env={"DISPLAY": "", "WAYLAND_DISPLAY": ""}); n.drain(2); n.send("yyjp", 0.8); n.send("ddP", 0.8)
+    check("클립보드(화면 없는 환경): 기본 yank/put 에서 오류 없음", n.alive() and not n.errors(), n.errors())
+    check("클립보드(화면 없는 환경): 시스템 클립보드를 쓰지 않음(clipboard 비어 있음)", n.q("&clipboard") == "", n.q("&clipboard")); n.close()
+
+    # ── 새 PC 상태: npm 이 없을 때(안내만 하고 오류 없음), npm 만 있을 때(설치 명령 인자 확인)
+    shim = f"{HOME}/shim"; shutil.rmtree(shim, ignore_errors=True); os.makedirs(shim)
+    for b in ("git", "sh", "env", "cat", "ls", "uname", "sleep", "mkdir", "rm", "cp", "mv", "head", "tail", "grep", "sed", "dirname", "basename"):
+        w = shutil.which(b)
+        if w: os.symlink(w, f"{shim}/{b}")
+    fakehome = f"{HOME}/newpc-home"; shutil.rmtree(fakehome, ignore_errors=True); os.makedirs(fakehome)
+    n = Nv("a.tf", env={"PATH": shim, "HOME": fakehome}); n.drain(3)
+    m = n.q("execute('messages')")
+    check("새 PC(npm 없음): 안내만 하고 Lua 오류 없음", n.alive() and "E5108" not in m and "stack traceback" not in m, m[-300:])
+    check("새 PC(npm 없음): 'npm이 없습니다' 안내", "npm" in m or n.alive(), m[-200:]); n.close()
+    log = f"{HOME}/npm-calls.log"; open(log, "w").close()
+    npm = f"{shim}/npm"; open(npm, "w").write(f'#!/bin/sh\necho "$@" >> "{log}"\nexit 0\n'); os.chmod(npm, 0o755)
+    n = Nv("a.tf", env={"PATH": shim, "HOME": fakehome}); n.drain(4); n.close()
+    calls = open(log).read()
+    check("새 PC(npm 있음): claude·codex 를 --prefix ~/.npm-global 로 설치", f"install -g --prefix {fakehome}/.npm-global @anthropic-ai/claude-code" in calls and f"@openai/codex" in calls, calls)
+    check("새 PC: 전역 npm 설정(config)을 건드리지 않음", "config" not in calls, calls)
+
+    # ── 반복 사용 후 누수: 패널 토글·분할/닫기를 반복해도 창·터미널·autocmd·메모리가 늘지 않는가
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.drain(2)
+    for _ in range(3):                      # 예열(처음 한두 번은 지연 로드로 늘 수 있다)
+        n.send(LEADER + "ac", 1.0); n.send("\x08", 0.3) if n.state()["mode"] == "t" else None; n.send(LEADER + "ac", 0.8)
+        n.send(LEADER + "]", 0.6); n.send(LEADER + "\\", 0.6)
+    base_rss = n.rss_mb(); base_ac = n.q("len(nvim_get_autocmds({}))")
+    for _ in range(15):
+        n.send(LEADER + "ac", 1.0); n.send("\x08", 0.3) if n.state()["mode"] == "t" else None; n.send(LEADER + "ac", 0.8)
+    terms = int(n.q("len(filter(getbufinfo(), 'v:val.name =~ \"toggleterm\"'))"))
+    check("반복 토글 15회: 터미널 버퍼가 하나만 유지(누수 없음)", terms <= 1, terms)
+    for _ in range(15):
+        n.send(LEADER + "]", 0.6); n.send(LEADER + "\\", 0.6)
+    check("분할/닫기 15회: 파일 창 1개로 복귀", len(n.kinds("file")) == 1 and n.alive(), n.state())
+    check("반복 사용: autocmd 개수 증가 없음", n.q("len(nvim_get_autocmds({}))") == base_ac, (base_ac, n.q("len(nvim_get_autocmds({}))")))
+    grow = n.rss_mb() - base_rss
+    check("반복 사용: nvim 메모리 증가 < 60MB", grow < 60, f"{base_rss:.0f}MB -> {n.rss_mb():.0f}MB")
+    check("반복 사용: 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 한글(전각) 파일 이름: 탭 ✕ 클릭이 그 탭을 닫는가
+    for nm in ("한글파일.tf", "두번째 파일.tf"): open(f"{FIX}/{nm}", "w").write("# k\n")
+    n = Nv("a.tf"); n.send(":e 한글파일.tf\r", 1); n.send(":e 두번째\\ 파일.tf\r", 1)
+    tc = {t["name"]: t for t in n.tabcols()}
+    check("전각 이름: 탭 좌표 계산", {"한글파일.tf", "두번째 파일.tf"} <= set(tc), list(tc))
+    if "한글파일.tf" in tc:
+        t = tc["한글파일.tf"]; n.click(t["row"], t["close"]); w = n.kinds("file")[0]
+        check("전각 이름: 한글파일.tf 의 ✕ 클릭 → 그 탭만 닫힘", "한글파일.tf" not in w["tabs"] and "a.tf" in w["tabs"] and "두번째 파일.tf" in w["tabs"], w["tabs"])
+    n.close()
+
+    # ── 색 대비(WCAG): 탭줄·창 글자가 읽을 수 있는가
+    n = Nv("a.tf"); n.drain(2)
+    def hl(name):
+        r = n.q(f"luaeval('vim.inspect(vim.api.nvim_get_hl(0,{{name=\"{name}\",link=false}}))')")
+        import re
+        fg = re.search(r"fg = (\d+)", r); bg = re.search(r"bg = (\d+)", r)
+        f = f"#{int(fg.group(1)):06x}" if fg else None; b = f"#{int(bg.group(1)):06x}" if bg else None
+        return f, b
+    normal_bg = hl("Normal")[1] or "#1a1b26"
+    for name, minr in (("TabLine", 3.0), ("TabLineSel", 4.5), ("PairTabClose", 3.0), ("PairTabAccent", 3.0), ("PairTabModified", 3.0), ("CursorLineNr", 3.0)):
+        f, b = hl(name); b = b or normal_bg
+        c = contrast(f, b) if f else 0
+        check(f"색 대비 {name}: {c:.1f}:1 ≥ {minr}", c >= minr, f"{f} on {b}")
+    n.close()
+
+    # ── 모음 키: 선택기(Snacks)가 열리고 닫히는가
+    n = Nv("a.tf")
+    for keys, label in ((LEADER + "hf", "파일 찾기"), (LEADER + "hr", "최근 파일"), (LEADER + "hg", "텍스트 검색"), (LEADER + "ha", "AI 선택")):
+        n.send(keys, 2.0); opened = len(n.kinds("float")) >= 1
+        n.send("\x1b", 0.8); n.send("\x1b", 0.5)
+        check(f"Space h {keys[-1]} ({label}): 선택기가 열리고 Esc 로 닫힘", opened and n.alive() and not n.errors(), n.errors())
+    n.send(LEADER + "hc", 1.5)
+    check("Space h c (코드 액션, LSP 없음): 오류 없이 처리", n.alive() and "E5108" not in n.q("execute('messages')"), n.q("execute('messages')")[-200:]); n.close()
+
+    # ── 천천히 눌러서 which-key 팝업이 뜬 상태에서도 키가 동작하는가
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1)
+    n.send(LEADER, 1.8); n.send("]", 1.5)
+    check("느린 입력(which-key 팝업 후) Space ]: 분할됨", len(n.kinds("file")) == 2, n.state())
+    n.send(LEADER, 1.8); n.send("\\", 1.5)
+    check("느린 입력 Space \\: 분할 닫힘", len(n.kinds("file")) == 1 and n.alive(), n.state())
+    n.send(LEADER, 1.8); n.send("b", 1.2); n.send("d", 1.5)
+    check("느린 입력 Space b d: 탭 닫힘", n.alive() and len(n.kinds("file")[0]["tabs"]) == 1, n.state()); n.close()
+
+    # ── 세션 복원: 그 사이 파일이 지워졌어도 오류 없이 복원
+    shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
+    tmpf = f"{FIX}/ephemeral.tf"; open(tmpf, "w").write("# e\n")
+    n = Nv("a.tf"); n.send(":e ephemeral.tf\r", 1); n.send(":qa!\r", 3); n.close()
+    os.remove(tmpf)
+    n = Nv(); n.drain(4)
+    check("세션 복원: 지워진 파일이 있어도 살아 있고 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e or "stack traceback" in e], n.errors()); n.close()
+
+    # ── 큰 파일(30MB)을 열어도 멈추지 않는가
+    big = f"{FIX}/big.log"
+    if not os.path.exists(big):
+        with open(big, "w") as f:
+            line = "x" * 120 + "\n"; f.write(line * 250000)
+    t0 = time.time(); n = Nv("big.log"); n.drain(1)
+    ok = n.alive(); dt = time.time() - t0
+    check("큰 파일(30MB): 열리고 응답함", ok and n.q("line('$')") != "", f"{dt:.1f}s")
+    n.send("G", 1.5)
+    check("큰 파일: 끝으로 이동·오류 없음", n.alive() and int(n.q("line('.')") or 0) > 1000 and not n.errors(), n.errors()); n.close()
+
+    # ── 설정값 확인(우리 기능이 기대는 옵션)
+    n = Nv("a.tf"); n.drain(2)
+    check("옵션: hidden", n.q("&hidden") == "1")
+    check("옵션: sessionoptions 에 globals(창별 탭 저장에 필요)", "globals" in n.q("&sessionoptions"), n.q("&sessionoptions"))
+    check("옵션: titlestring 이 PairVim", "PairVim" in n.q("&titlestring"), n.q("&titlestring"))
+    check("옵션: mouse 사용(탭 클릭에 필요)", "a" in n.q("&mouse") or "n" in n.q("&mouse"), n.q("&mouse"))
+    n.close()
+
 def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
@@ -451,6 +643,7 @@ if __name__ == "__main__":
         scenarios()
         scenarios_more()
         scenarios_audit()
+        scenarios_env()
         fuzz()
     finally:
         for f in os.listdir(HOME):

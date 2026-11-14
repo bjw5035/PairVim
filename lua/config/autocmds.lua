@@ -47,7 +47,7 @@ local function pairvim_highlights()
   set(0, "TabLineSel", { fg = "#c0caf5", bg = lift, bold = true }) -- 활성 탭
   set(0, "TabLineFill", { bg = dark })
   set(0, "PairTabAccent", { fg = "#7aa2f7", bg = lift })     -- 활성 탭 왼쪽 파란 막대
-  set(0, "PairTabClose", { fg = "#565f89", bg = dark })
+  set(0, "PairTabClose", { fg = "#636c96", bg = dark })
   set(0, "PairTabModified", { fg = "#e0af68", bg = lift, bold = true })
   set(0, "WinBar", { bg = dark })
   set(0, "WinBarNC", { bg = dark })
