@@ -10,6 +10,21 @@
 - 단축키 가이드(which-key) 상위 그룹명 한글화
 - Neovim을 apt로 설치하지 않고, 소스를 받아 실행 파일 이름/버전 문구를 "pairvim"/"PairVim"으로 바꾼 뒤 직접 빌드 (`build-pairvim.sh`, `pairvim-rebrand.patch`)
 
+## 이런 때 씁니다
+
+| 하고 싶은 일 | 쓰는 방법 |
+|---|---|
+| 프로젝트 폴더(테라폼, 스크립트, 설정 파일 등)를 읽고 고치기 | 폴더에서 `pairvim .` → `Space e` 탐색기 → 파일 열기. 분할(`Space ]`)로 두 파일을 나란히 비교 |
+| 코드·설정이 무슨 뜻인지 AI에게 묻기 | `F2`로 Claude Code/Codex 패널을 열고 질문(에디터 옆에 계속 떠 있음) |
+| 고친 뒤 바로 확인 | `F3`(또는 `Space t t`)으로 하단 셸을 열어 평소 명령을 실행. 테라폼이면 `Space t v`/`t f`/`t p` |
+| 서버에 들어가 작업 | 하단 셸에서 `ssh ...` — 같은 터미널 안에서 에디터와 셸을 오갑니다 |
+| 노트·문서(Markdown) 편집 | 노트 폴더에서 `pairvim .`, AI 패널에 "이 노트 정리해 줘" |
+| 작업을 닫았다가 이어하기 | 인자 없이 `pairvim` — 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됨 |
+
+여러 PC(집, 회사, 맥북)에서 **같은 설정**을 쓰는 것이 목적입니다. 새 PC에서는 **설치** 절의 방법으로 한 번 설치하고, 이후 변경은 시작 화면의 `u`(PairVim 업데이트)로 받습니다.
+
+처음에는 아래 키만 익히면 됩니다: `Space e`(탐색기), `Space f f`(파일 찾기), `Space /`(텍스트 검색), `Space ]`(분할), `Space \`(닫기), `Tab`(탭 이동), `F2`(AI 패널), `F3`(셸 패널). 나머지는 `Space`를 누르면 나오는 메뉴에서 찾습니다.
+
 ## 설치
 
 ### 상황별 선택
@@ -18,7 +33,8 @@
 |---|---|
 | 처음 설치 (Neovim 설정이 없음) | 아래 **빠른 설치** |
 | 이미 LazyVim/Neovim 설정이 있음 (`~/.config/nvim` 존재) | 같은 **빠른 설치** — 설치 스크립트가 기존 설정을 이름 붙여 옮겨 두고(확인 후), 언제든 되돌릴 수 있음 |
-| apt가 없는 환경 (macOS, Fedora 등) | 스크립트는 지원하지 않음. **수동 설치**를 참고해 직접 설치 |
+| 맥북(macOS) | 아래 **macOS(맥북)에서 설치** |
+| apt가 없는 그 밖의 환경 (Fedora 등) | 스크립트는 지원하지 않음. **수동 설치**를 참고해 직접 설치 |
 
 ### 빠른 설치 (처음이든 기존 설정이 있든 같은 방법)
 
@@ -51,6 +67,37 @@ pairvim
 처음 실행하면 lazy.nvim이 플러그인을 설치하고, `codex`/`claude` CLI가 없으면 자동 설치됩니다(이미 있으면 건너뜀). 메시지 다 지나갈 때까지 기다렸다가 아무 키나 누르면 끝. 두 CLI의 로그인은 직접 합니다.
 
 > **주의**: AI 패널(`Space a a`)을 처음 열면 열린 폴더의 "코드베이스 분석" 요청이 자동 실행됩니다. 민감한 자료가 있는 폴더에서는 처음 열지 마세요(빈 폴더에서 먼저 시험).
+
+### Ubuntu에서 설치할 때 알아 둘 것
+
+- **Node 18 이상이 필요합니다.** Claude CLI 설치에 쓰입니다. `node -v`로 확인하세요. Ubuntu 22.04의 apt `nodejs`는 12버전이라 부족합니다(24.04는 18.19로 충분). 낮으면 [nvm](https://github.com/nvm-sh/nvm)이나 NodeSource로 올린 뒤 설치 스크립트를 다시 실행하세요(`node`가 이미 있으면 apt로 덮어쓰지 않습니다).
+- 데스크탑 Ubuntu, 서버, WSL 모두 같은 방법입니다. CPU가 arm64(예: Apple Silicon 위의 Ubuntu VM)여도 소스 빌드라 동작해야 하지만, 빌드가 오래 걸립니다(arm64는 시험하지 못했습니다).
+- 터미널 폰트를 **Nerd Font**로 지정하세요(아이콘이 깨집니다).
+
+### macOS(맥북)에서 설치
+
+`install.sh`는 apt 기반이라 macOS에서는 쓰지 않고, [Homebrew](https://brew.sh)로 직접 설치합니다. **macOS에서는 시험하지 못했습니다**(Ubuntu/WSL에서만 시험). 막히면 출력과 함께 알려 주세요.
+
+```bash
+# 1) 도구 설치
+brew install git cmake ninja gettext curl pkg-config node ripgrep fd
+
+# 2) 설정 받기 (~/.config/nvim 이 이미 있으면 먼저 옮겨 두세요: mv ~/.config/nvim ~/.config/nvim-old)
+git clone https://github.com/bjw5035/PairVim.git ~/.config/nvim
+
+# 3) pairvim 빌드 (몇 분 걸림, 결과는 ~/.local/bin/pairvim)
+bash ~/.config/nvim/build-pairvim.sh
+
+# 4) PATH 추가(없다면) 후 새 터미널에서 실행
+echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
+pairvim --version | head -1
+pairvim
+```
+
+- Claude/Codex CLI는 처음 켤 때 `~/.npm-global`에 자동 설치됩니다(`node`/`npm` 필요, 로그인은 직접).
+- 터미널 앱(Terminal, iTerm2 등)의 폰트를 **Nerd Font**로 지정하세요. 클립보드는 macOS 기본(`pbcopy`)을 그대로 씁니다.
+- **맥북 키보드의 함정**: `F2`/`F3`/`F4`는 기본 설정에서 `Fn` 키를 함께 눌러야 합니다(또는 시스템 설정에서 "F1, F2 등의 키를 표준 기능 키로 사용"). 대신 같은 기능의 키가 있습니다: AI 패널 선택 `Space a a`, 셸 패널 `Space t t`, 터미널에서 노멀 모드로 나가기 `Ctrl-\` 다음 `Ctrl-n`.
+- 업데이트는 시작 화면의 `u` 또는 `:Pair update`(아래 **업데이트**)로 Ubuntu와 같습니다. `pairvim-rebrand.patch`가 바뀐 경우에만 `rm ~/.local/bin/pairvim` 후 3)을 다시 실행하세요.
 
 ### 되돌리기
 
@@ -154,6 +201,8 @@ echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bash
 | `F3` / `Space t t` | 하단 셸 패널 토글 (현재 파일 폴더에서 시작) |
 | `Space t p` / `t v` / `t f` | terraform plan / validate / fmt (현재 파일 폴더) |
 | (패널 안에서) `F4` | 터미널 노멀 모드로 빠져나가기 (`Esc`는 Claude/vi에 그대로 전달) |
+
+맥북이면 `F2`/`F3`/`F4` 대신 `Space a a` / `Space t t` / `Ctrl-\ Ctrl-n` 를 쓰면 `Fn` 키가 필요 없습니다.
 
 상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`만 켜면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다.
 

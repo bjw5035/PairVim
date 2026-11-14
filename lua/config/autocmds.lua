@@ -62,12 +62,17 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   callback = function() vim.schedule(pairvim_highlights) end,
 })
 
--- 마지막 파일 창을 닫았을 때(:q 등) 탐색기나 터미널 패널만 남으면 nvim 을 종료한다(저장 안 한 파일이 있으면 물어본다).
+-- 파일 창이 있었다가 마지막 파일 창이 닫혔을 때(:q 등) 탐색기나 터미널 패널만 남으면 nvim 을 종료한다
+-- (저장 안 한 파일이 있으면 물어본다). 파일을 한 번도 연 적이 없거나 시작 직후(3초)에는 동작하지 않는다:
+-- `nvim .` 처럼 시작하는 중에 창이 정리되는 것을 "마지막 파일 창을 닫음"으로 오해해 종료를 시도하면 안 된다.
+local pairvim_start = vim.uv.now()
 vim.api.nvim_create_autocmd("WinClosed", {
   group = vim.api.nvim_create_augroup("pairvim_quit_when_no_files", { clear = true }),
   callback = function()
     vim.schedule(function()
       if vim.v.vim_did_enter ~= 1 or vim.g.SessionLoad ~= nil then return end
+      if not vim.g.pairvim_had_file then return end
+      if vim.uv.now() - pairvim_start < 3000 then return end
       local pt = require("config.pane-tabs")
       local others = 0
       for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do

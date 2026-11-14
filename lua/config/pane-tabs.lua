@@ -179,6 +179,7 @@ end
 local function refresh()
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if is_file_win(w) then
+      vim.g.pairvim_had_file = true -- 파일 창이 한 번이라도 있었음(마지막 파일 창이 닫혔을 때 종료하는 동작의 조건)
       M.add(w, vim.api.nvim_win_get_buf(w))
       vim.wo[w].winbar = ("%%{%%v:lua.PairTabs(%d)%%}"):format(w)
     elseif vim.api.nvim_win_get_config(w).relative == "" and vim.wo[w].winbar:find("PairTabs", 1, true) then

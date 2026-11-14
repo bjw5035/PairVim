@@ -37,19 +37,21 @@ local function git(args, cb, timeout)
   end, timeout or 20000)
 end
 
--- 시작 화면 항목(Snacks 대시보드 키). 새 커밋이 있으면 desc 에 개수가 붙는다.
-M.dash_entry = { icon = "󰚰 ", key = "u", desc = "PairVim 업데이트", action = ":Pair update" }
+-- 시작 화면 항목(Snacks 대시보드). 그릴 때마다 현재 상태로 만든다: 새 커밋이 있으면 desc 에 개수가 붙는다.
+function M.dash_item()
+  local n = M.behind
+  return {
+    icon = "󰚰 ",
+    key = "u",
+    desc = (n and n > 0) and ("PairVim 업데이트  ● 새 커밋 " .. n .. "개") or "PairVim 업데이트",
+    action = ":Pair update",
+  }
+end
+
+-- 시작 화면 다시 그리기(섹션을 다시 계산할 뿐, 시작 화면을 닫았다 열지 않는다)
 local function refresh_dash()
-  M.dash_entry.desc = (M.behind and M.behind > 0) and ("PairVim 업데이트  ● 새 커밋 " .. M.behind .. "개") or "PairVim 업데이트"
   local ok, snacks = pcall(function() return require("snacks") end)
-  if not ok or not snacks.dashboard then return end
-  -- 이미 열려 있는 시작 화면은 열릴 때 설정을 복사해 갔으므로, 같은 창에 다시 열어서 새 문구를 보여 준다.
-  for _, w in ipairs(vim.api.nvim_list_wins()) do
-    local b = vim.api.nvim_win_get_buf(w)
-    if vim.bo[b].filetype == "snacks_dashboard" then
-      pcall(snacks.dashboard.open, { buf = b, win = w })
-    end
-  end
+  if ok and snacks.dashboard and snacks.dashboard.update then pcall(snacks.dashboard.update) end
 end
 
 -- 새 커밋 확인(받지 않음). silent=true 면 실패해도 아무 말 하지 않는다.
@@ -173,7 +175,8 @@ function M.setup()
   vim.api.nvim_create_user_command("PairUpdate", M.update, { desc = "PairVim 업데이트" })
   -- 시작 후 새 커밋이 있는지 조용히 확인
   if not vim.g.pairvim_no_update_check then
-    vim.defer_fn(function() M.check(true) end, 2500)
+    local delay = tonumber(vim.env.PAIRVIM_CHECK_DELAY_MS) or 2500 -- (시험에서 시작 직후 경쟁 상태를 만들 때만 환경변수로 바꾼다)
+    vim.defer_fn(function() M.check(true) end, delay)
   end
 end
 

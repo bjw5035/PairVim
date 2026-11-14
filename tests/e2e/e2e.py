@@ -651,7 +651,7 @@ def scenarios_update():
 
     # 1) 최신 상태: 시작 화면에 u 항목, 새 커밋 표시 없음
     cfgroot, cfg = fresh("c1"); n = start(cfgroot, "s1"); n.drain(6)
-    check("시작 화면: PairVim 업데이트 항목 존재", n.q("luaeval('require(\"config.pair\").dash_entry.key')") == "u")
+    check("시작 화면: PairVim 업데이트 항목 존재", n.q("luaeval('require(\"config.pair\").dash_item().key')") == "u")
     scr = n.text()
     if scr is not None: check("시작 화면: 'PairVim 업데이트' 글자가 보임", "PairVim 업데이트" in scr, scr[-300:])
     check("시작 시 확인(최신): 뒤처짐 0", beh(n) == "0", beh(n))
@@ -711,6 +711,20 @@ def scenarios_update():
     n = Nv("a.tf"); n.drain(2); n.send(":Pair update\r", 2); n.send(":Pair check\r", 2); n.send(":Pair\r", 2)
     check("git 저장소 아님: :Pair 명령들이 안내만 하고 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e], n.errors()); n.close()
 
+def scenarios_startup_race():
+    """과거 버그: 파일을 한 번도 연 적 없는데 시작 화면 창이 닫히면(또는 nvim . 시작 중 창이 정리되면) nvim 이 종료를 시도했다."""
+    shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
+    n = Nv(); n.drain(3); n.send(LEADER + "e", 2.5)
+    n.q("luaeval('(function() for _,w in ipairs(vim.api.nvim_list_wins()) do if vim.bo[vim.api.nvim_win_get_buf(w)].filetype==\"snacks_dashboard\" then vim.api.nvim_set_current_win(w) end end end)()')")
+    n.send(":close\r", 3.5)
+    check("파일 연 적 없음: 시작 화면 창을 닫아도 nvim 이 종료되지 않음", n.alive(), "")
+    check("파일 연 적 없음: 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e or "traceback" in e], n.errors() if n.alive() else "")
+    n.close()
+    for delay in (0, 100, 400):
+        n = Nv(".", env={"PAIRVIM_CHECK_DELAY_MS": str(delay)}); n.drain(6)
+        check(f"nvim . 시작(업데이트 확인 {delay}ms 후): 살아 있고 Lua 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e or "traceback" in e], n.errors() if n.alive() else "")
+        n.close()
+
 def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
@@ -745,6 +759,7 @@ if __name__ == "__main__":
         scenarios_audit()
         scenarios_env()
         scenarios_update()
+        scenarios_startup_race()
         fuzz()
     finally:
         for f in os.listdir(HOME):
