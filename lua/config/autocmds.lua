@@ -61,3 +61,26 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   group = vim.api.nvim_create_augroup("pairvim_highlights", { clear = true }),
   callback = function() vim.schedule(pairvim_highlights) end,
 })
+
+-- 마지막 파일 창을 닫았을 때(:q 등) 탐색기나 터미널 패널만 남으면 nvim 을 종료한다(저장 안 한 파일이 있으면 물어본다).
+vim.api.nvim_create_autocmd("WinClosed", {
+  group = vim.api.nvim_create_augroup("pairvim_quit_when_no_files", { clear = true }),
+  callback = function()
+    vim.schedule(function()
+      if vim.v.vim_did_enter ~= 1 or vim.g.SessionLoad ~= nil then return end
+      local pt = require("config.pane-tabs")
+      local others = 0
+      for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.api.nvim_win_get_config(w).relative == "" then
+          if pt.is_file_win(w) then return end
+          local b = vim.api.nvim_win_get_buf(w)
+          local ft = vim.bo[b].filetype
+          local aux = vim.bo[b].buftype == "terminal" or ft:find("^snacks_picker") or ft == "snacks_layout_box"
+          if not aux then return end -- 대시보드·도움말·기타 창이 있으면 그대로 둔다
+          others = others + 1
+        end
+      end
+      if others > 0 then pcall(vim.cmd, "confirm qall") end
+    end)
+  end,
+})

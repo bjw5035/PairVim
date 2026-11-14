@@ -79,5 +79,57 @@ pairvim_repo "$H/.config/nvim"; cp "$HERE/install.sh" "$H/.config/nvim/install.s
 ( export HOME="$H"; bash "$H/.config/nvim/install.sh" --rollback --yes ) >/dev/null 2>&1; RC=$?
 [ "$RC" = 0 ] && [ "$(cat "$H/.config/nvim/init.lua" 2>/dev/null)" = OLD ] && [ ! -e "$H/.local/share/nvim/lazy/new" ]; ok "--rollback 실행: 자기 자신이 든 폴더를 지워도 정상 종료·복원" $?
 
+# 13) 전체 설치(가짜 apt/sudo, 빌드는 가짜 pairvim 로 건너뜀): 새 PC 에서 끝까지 돌고, 두 번 돌려도 같은 결과(멱등)
+mkstubs() { # apt·sudo·pairvim 가짜(실제 설치·빌드·네트워크 없음). 호출 기록은 $1/calls.log
+  mkdir -p "$1/bin"
+  printf '#!/bin/sh\necho "apt $*" >>"%s/calls.log"\n' "$1" >"$1/bin/apt"
+  printf '#!/bin/sh\necho "sudo $*" >>"%s/calls.log"\nexec "$@"\n' "$1" >"$1/bin/sudo"
+  printf '#!/bin/sh\necho "NVIM v0.12.6 (PairVim)"\n' >"$1/bin/pairvim"
+  chmod +x "$1/bin/"*
+}
+H=$(mkhome); T=$(mkhome); mkstubs "$T"; mkdir -p "$H/.config"
+touch "$H/.zshrc" "$H/.bashrc"
+if [ -d "$HERE/.git" ]; then
+  run_install() { ( export HOME="$H" PATH="$T/bin:$PATH"; bash "$HERE/install.sh" --yes ) >"$T/out$1.log" 2>&1; }
+  run_install 1; RC1=$?
+  [ "$RC1" = 0 ] && [ -f "$H/.config/nvim/init.lua" ] && [ -f "$H/.config/nvim/install.sh" ]; ok "전체 설치(새 PC): 종료 0, 설정이 ~/.config/nvim 에 놓임" $?
+  [ "$(git -C "$H/.config/nvim" remote get-url origin)" = "https://github.com/bjw5035/PairVim.git" ]; ok "전체 설치: 원격 주소가 PairVim 공개 주소" $?
+  [ "$(grep -c 'npm-global/bin' "$H/.zshrc")" = 1 ] && [ "$(grep -c 'HOME/.local/bin' "$H/.bashrc")" = 1 ]; ok "전체 설치: rc 파일에 PATH 한 줄씩 추가" $?
+  [ -d "$H/.npm-global" ]; ok "전체 설치: ~/.npm-global 생성(sudo 없는 npm 전역 경로)" $?
+  ! grep -q "npm config" "$T/calls.log" 2>/dev/null; ok "전체 설치: 전역 npm 설정을 바꾸지 않음" $?
+  run_install 2; RC2=$?
+  [ "$RC2" = 0 ] && [ "$(grep -c 'npm-global/bin' "$H/.zshrc")" = 1 ] && [ "$(grep -c 'HOME/.local/bin' "$H/.bashrc")" = 1 ]; ok "전체 설치 2회차: 멱등(PATH 중복 없음)" $?
+  [ ! -e "$H/.config/.pairvim-last-backup" ] && ! ls "$H/.config" | grep -q "nvim-old"; ok "전체 설치 2회차: 이미 PairVim 이라 백업하지 않음" $?
+  grep -q "이미 설치되어 있습니다" "$T/out2.log"; ok "빌드 단계: pairvim 이 이미 있으면 다시 빌드하지 않음" $?
+fi
+
+# 14) 옛 LazyVim 이 있는 PC 에서 전체 설치: 백업 후 설치, 롤백까지 한 번에
+if [ -d "$HERE/.git" ]; then
+  H=$(mkhome); T=$(mkhome); mkstubs "$T"; lazyvim "$H"; touch "$H/.zshrc"
+  ( export HOME="$H" PATH="$T/bin:$PATH"; bash "$HERE/install.sh" --yes ) >"$T/out.log" 2>&1; RC=$?
+  N=$(cat "$H/.config/.pairvim-last-backup" 2>/dev/null)
+  [ "$RC" = 0 ] && [ -n "$N" ] && [ "$(cat "$H/.config/$N/init.lua")" = OLD ] && [ -f "$H/.config/nvim/install.sh" ]; ok "옛 LazyVim 있는 PC: 백업 후 전체 설치" $?
+  ( export HOME="$H" PATH="$T/bin:$PATH"; bash "$H/.config/nvim/install.sh" --rollback --yes ) >"$T/rb.log" 2>&1; RC=$?
+  [ "$RC" = 0 ] && [ "$(cat "$H/.config/nvim/init.lua" 2>/dev/null)" = OLD ] && [ -f "$H/.local/share/nvim/lazy/foo/x" ]; ok "설치 직후 롤백: 옛 설정과 플러그인 복원" $?
+fi
+
+# 15) build-pairvim.sh: 가짜 git/make 로 흐름만 확인(실제 빌드 없음)
+mkbuild() { # $1=임시폴더 $2=git apply 성공 여부(0/1)
+  mkdir -p "$1/bin" "$1/home"
+  printf '#!/bin/sh\necho "git $*" >>"%s/calls.log"\ncase "$1" in\n  clone) mkdir -p "$HOME/.local/src/pairvim-neovim" ;;\n  apply) case "$*" in *--reverse*) exit 1;; *) exit %s;; esac ;;\nesac\nexit 0\n' "$1" "$2" >"$1/bin/git"
+  printf '#!/bin/sh\necho "make $*" >>"%s/calls.log"\nexit 0\n' "$1" >"$1/bin/make"
+  for b in cmake ninja gettext autoconf automake libtool pkg-config gcc unzip curl sudo apt; do printf '#!/bin/sh\nexit 0\n' >"$1/bin/$b"; done
+  chmod +x "$1/bin/"*
+}
+T=$(mkhome); mkbuild "$T" 0
+( export HOME="$T/home" PATH="$T/bin:/usr/bin:/bin" PAIRVIM_NVIM_REF=v0.12.6; bash "$HERE/build-pairvim.sh" ) >"$T/out.log" 2>&1; RC=$?
+[ "$RC" = 0 ] && grep -q "git clone --depth 1 --branch v0.12.6" "$T/calls.log" && grep -q "^make " "$T/calls.log"; ok "build-pairvim.sh: PAIRVIM_NVIM_REF 태그로 클론하고 make 실행" $?
+T=$(mkhome); mkbuild "$T" 1
+( export HOME="$T/home" PATH="$T/bin:/usr/bin:/bin"; bash "$HERE/build-pairvim.sh" ) >"$T/out.log" 2>&1; RC=$?
+[ "$RC" != 0 ] && grep -q "패치 적용 실패" "$T/out.log" && ! grep -q "^make " "$T/calls.log"; ok "build-pairvim.sh: 패치가 안 맞으면 안내하고 빌드하지 않음" $?
+T=$(mkhome); mkbuild "$T" 0
+( export HOME="$T/home" PATH="$T/bin:/usr/bin:/bin"; bash "$HERE/build-pairvim.sh" ) >"$T/out.log" 2>&1
+grep -q "git clone --depth 1 --branch stable" "$T/calls.log"; ok "build-pairvim.sh: 태그 미지정 시 stable" $?
+
 echo; echo "TOTAL $((PASS+FAIL)), FAIL $FAIL"
 exit $FAIL

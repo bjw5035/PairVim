@@ -116,7 +116,11 @@ local function get_shell()
       size = 16,
       close_on_exit = true,
       start_in_insert = true,
-      on_exit = function() shell_term = nil end,
+      on_exit = function(t)
+        -- 셸이 끝나면(exit) 죽은 터미널 창이 남지 않게 정리하고, 다음 F3 가 새 셸을 연다
+        shell_term = nil
+        vim.schedule(function() pcall(function() t:shutdown() end) end)
+      end,
     })
   end
   return shell_term

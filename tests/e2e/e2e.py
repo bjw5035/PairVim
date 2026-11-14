@@ -47,6 +47,7 @@ def envs():
     e.update(XDG)
     e["PATH"] = f"{BIN}:{os.path.dirname(NVIM)}:{e['PATH']}"
     e["TERM"] = "xterm-256color"
+    e["SHELL"] = "/bin/sh"      # 사용자의 zsh 설정(느린 시작·프롬프트)에 시험이 좌우되지 않게 한다
     return e
 
 class Nv:
@@ -301,6 +302,123 @@ def scenarios_more():
     check("상태줄: AWS 프로필 표시", "stg-admin" in sl, sl[:150])
     check("상태줄: terraform 워크스페이스 표시", "staging" in sl, sl[:150]); n.close()
 
+def scenarios_audit():
+    # ── README 에 적힌 단축키가 실제로 매핑돼 있는가(문서와 코드의 일치)
+    n = Nv("a.tf"); n.drain(2)
+    keys = [("n", " hf"), ("n", " hr"), ("n", " hg"), ("n", " he"), ("n", " ht"), ("n", " hb"), ("n", " hs"), ("n", " hv"),
+            ("n", " hx"), ("n", " hc"), ("n", " ha"), ("n", "<F2>"), ("t", "<F2>"), ("n", " ac"), ("n", " ax"), ("n", " aa"),
+            ("n", "<Tab>"), ("n", "<S-Tab>"), ("n", "<S-h>"), ("n", "<S-l>"), ("n", " bd"), ("n", " ["), ("n", " ]"), ("n", " \\"),
+            ("n", " e"), ("n", "<F3>"), ("t", "<F3>"), ("n", " tt"), ("n", " tp"), ("n", " tv"), ("n", " tf"), ("n", "]b"), ("n", "[b")]
+    missing = []
+    for mode, lhs in keys:
+        l = lhs.replace(" ", "<Space>")
+        r = n.q(f"maparg('{l}', '{mode}') != '' || maparg('{l}', '{mode}', 0, 1) != {{}}")
+        if r != "1": missing.append(f"{mode}:{lhs}")
+    check("README 단축키가 모두 매핑돼 있음", not missing, missing)
+    tleader = n.q("join(filter(map(nvim_get_keymap('t'), 'v:val.lhs'), 'v:val[0] ==# \" \"'), ',')")
+    check("터미널 모드에 스페이스 leader 매핑 없음(입력 지연 방지)", tleader == "", tleader)
+    # 트리시터 하이라이트가 .tf 에서 켜져 있는가
+    n.send(":e b.tf\r", 3)
+    active = n.q("luaeval('vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil')")
+    check("terraform(.tf) 트리시터 하이라이트 활성", active == "true", f"active={active} ft={n.q('&filetype')} syntax={n.q('&syntax')}")
+    n.close()
+
+    # ── 한글 바이트 입력: 편집 버퍼와 패널 모두에서 깨지지 않는가(IME 조합 자체는 시험 불가)
+    n = Nv("a.tf"); n.send("ggO# 한글 주석 테스트 ✓\x1b", 1)
+    first = n.q("getline(1)")
+    check("한글 입력: 편집 버퍼", "한글 주석 테스트 ✓" in first, first)   # (주석 줄에서 O 하면 "# " 가 자동으로 이어 붙는다)
+    n.send(LEADER + "ac", 3); n.send("안녕하세요 claude\r", 1.2)
+    txt = n.q("join(getline(1,20),'|')")
+    check("한글 입력: 터미널 패널에 그대로 도달", "안녕하세요 claude" in txt, txt[:160]); n.close()
+
+    # ── 경로에 공백·한글·따옴표가 있어도 셸 패널 명령이 그 폴더에서 실행되는가
+    weird = f"{FIX}/테스트 폴더/it's here"
+    os.makedirs(weird, exist_ok=True); open(f"{weird}/main.tf", "w").write("# x\n")
+    n = Nv("테스트 폴더/it's here/main.tf"); n.send(LEADER + "tp", 3)
+    out = n.q("join(map(getbufinfo({'buftype':'terminal'}), 'join(getbufline(v:val.bufnr,1,12),\"|\")'),'#')")
+    check("특수 경로: terraform plan 이 그 폴더에서 실행", "FAKE-terraform plan" in out, out[:200])
+    check("특수 경로: 탭 이름·오류", n.kinds("file") and n.kinds("file")[0]["tabs"] == ["main.tf"] and not n.errors(), n.errors()); n.close()
+
+    # ── 탭이 아주 많을 때: 렌더 시간과 활성 탭이 보이는가
+    many = [f"{FIX}/many/f{i:03d}.tf" for i in range(80)]
+    os.makedirs(f"{FIX}/many", exist_ok=True)
+    for f in many: open(f, "w").write("# m\n")
+    n = Nv(many[0])
+    for f in many[1:]: n.send(f":e {f}\r", 0.15)
+    n.drain(2)
+    ms = n.q("luaeval('(function() local t=vim.uv.hrtime(); for i=1,50 do PairTabs(vim.api.nvim_get_current_win()) end; return (vim.uv.hrtime()-t)/1e6/50 end)()')")
+    check("탭 80개: 탭줄 렌더 1회 < 5ms", ms and float(ms) < 5.0, f"{ms}ms")
+    # 활성 탭(어디에 있든)이 탭줄 안에 들어 있어야 한다: eval_statusline 의 결과 문자열에 이름이 있는지로 확인
+    def shown(name):
+        n.send(f":e {FIX}/many/{name}.tf\r", 0.8)
+        return n.q("luaeval('(function() local w=vim.api.nvim_get_current_win(); local r=vim.api.nvim_eval_statusline(vim.wo[w].winbar,{winid=w,use_winbar=true}); return r.str:find(vim.fn.expand(\"%:t\"),1,true) ~= nil and r.width <= vim.api.nvim_win_get_width(w) end)()')") == "true"
+    check("탭 80개: 맨 앞/중간/끝 어디서든 활성 탭이 탭줄 안에 보임", all(shown(x) for x in ("f000", "f010", "f040", "f079")), "활성 탭이 잘림")
+    check("탭 80개: 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 터미널 프로세스가 끝난 뒤 다시 열 수 있는가
+    n = Nv("a.tf"); n.send("\x1bOR", 1.5); n.send("exit\r", 1.5)
+    n.send("\x1bOR", 1.5)
+    check("셸 패널: exit 후 F3 로 다시 열림", len(n.kinds("term")) == 1 and n.alive(), n.state())
+    check("셸 패널: exit 후 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 인자 없이 켠 시작 화면(대시보드)에서의 동작
+    shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
+    n = Nv(); n.drain(3)
+    check("시작 화면: 살아 있음·오류 없음", n.alive() and not n.errors(), n.errors())
+    n.send(LEADER + "\\", 2)
+    check("시작 화면에서 Space \\ : 종료하거나 아무 일도 없음(오류 없음)", (not n.alive()) or not n.errors(), n.errors()); n.close()
+
+    # ── 디렉터리를 열었을 때
+    n = Nv("."); n.drain(3)
+    check("nvim . : 살아 있음·오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
+
+    # ── :q 로 마지막 파일 창을 닫을 때 탐색기/패널만 남지 않는가
+    n = Nv("a.tf"); open_explorer(n); n.send(":q\r", 2)
+    left = n.state()
+    check(":q 후 탐색기만 남지 않음(종료하거나 파일 창이 남음)", (not n.alive()) or any(w["kind"] == "file" for w in left["wins"]), left)
+    n.close()
+    n = Nv("a.tf"); n.send(LEADER + "ac", 3); n.send("\x08", 0.8); n.send(":q\r", 2)
+    left = n.state() if n.alive() else None
+    check(":q 후 Claude 패널만 남지 않음(종료하거나 파일 창이 남음)", left is None or any(w["kind"] == "file" for w in left["wins"]), left)
+    n.close()
+
+    # ── 설정 다시 불러오기가 중복·오류를 만들지 않는가
+    n = Nv("a.tf"); n.drain(2)
+    before = n.q("len(nvim_get_autocmds({'group': 'pairvim_pane_tabs'}))")
+    for f in ("config/keymaps.lua", "config/autocmds.lua", "config/pane-tabs.lua"):
+        n.q(f"execute('luafile {XDG['XDG_CONFIG_HOME']}/nvim/lua/{f}')")
+    after = n.q("len(nvim_get_autocmds({'group': 'pairvim_pane_tabs'}))")
+    check("설정 재적용: autocmd 중복 없음", before == after, f"{before} -> {after}")
+    check("설정 재적용: 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── Space h 모음 키가 동작하는가
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1)
+    n.send(LEADER + "hs", 1.5); check("Space h s: 아래 분할", len(n.kinds("file")) == 2, n.state())
+    n.send(LEADER + "hx", 1.5); check("Space h x: 분할 닫기", len(n.kinds("file")) == 1, n.state())
+    n.send(LEADER + "hv", 1.5); check("Space h v: 오른쪽 분할", len(n.kinds("file")) == 2, n.state())
+    n.send(LEADER + "hx", 1.5)
+    n.send(LEADER + "ht", 1.2); f = n.kinds("file")[0]
+    check("Space h t: 다음 탭", f["file"] == "a.tf", f)
+    n.send(LEADER + "hb", 1.5); f = n.kinds("file")[0]
+    check("Space h b: 탭 닫기", f["tabs"] == ["b.tf"], f)
+    n.send(LEADER + "he", 2.5); check("Space h e: 탐색기", len(n.kinds("explorer")) >= 1, n.state())
+    check("Space h 모음: 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 분할 여러 개(가로+세로)를 닫아 가도 탭이 사라지지 않는가
+    n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(":e c.tf\r", 1)
+    n.send(LEADER + "]", 1.2); n.send(LEADER + "[", 1.2); n.send(LEADER + "]", 1.2)
+    nf = len(n.kinds("file"))
+    while len(n.kinds("file")) > 1 and n.alive():
+        n.send(LEADER + "\\", 1.2)
+    f = n.kinds("file")
+    check("분할 4개→1개: 모든 탭이 남은 창으로 이동", nf >= 3 and len(f) == 1 and {"a.tf", "b.tf", "c.tf"} <= set(f[0]["tabs"]), (nf, f))
+    check("분할 연속 닫기: 오류 없음", not n.errors(), n.errors()); n.close()
+
+    # ── 아주 좁은 창·긴 파일 이름
+    longname = "x" * 90 + ".tf"; open(f"{FIX}/{longname}", "w").write("# l\n")
+    n = Nv(longname, rows=20, cols=40); n.send(LEADER + "]", 1.5); n.send(":e a.tf\r", 1)
+    check("좁은 창(40열)+긴 이름: 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
+
 def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
@@ -332,6 +450,7 @@ if __name__ == "__main__":
     try:
         scenarios()
         scenarios_more()
+        scenarios_audit()
         fuzz()
     finally:
         for f in os.listdir(HOME):

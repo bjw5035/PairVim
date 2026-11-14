@@ -132,27 +132,47 @@ end
 
 local function esc(s) return (s:gsub("%%", "%%%%")) end
 
--- winbar 문자열: 창 번호를 인자로 받아(창마다 winbar 값에 번호를 박아 둔다) 그 창의 탭 목록을 만든다
+-- winbar 문자열: 창 번호를 인자로 받아(창마다 winbar 값에 번호를 박아 둔다) 그 창의 탭 목록을 만든다.
+-- 탭이 창 너비보다 많으면 활성 탭 주변만 보여 주고 양쪽에 숨은 개수(‹3 / 5›)를 표시한다.
 function _G.PairTabs(w)
   if not w or not vim.api.nvim_win_is_valid(w) then return "" end
   local cur = vim.api.nvim_win_get_buf(w)
-  local parts = {}
+  local okm, mini = pcall(require, "mini.icons")
+  local segs, active_idx = {}, 1
   for _, b in ipairs(clean(w)) do
     local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(b), ":t")
     if name == "" then name = "[이름 없음]" end
     local active = b == cur
     local icon = ""
-    local okm, mini = pcall(require, "mini.icons")
     if okm then
       local ic = mini.get("file", name)
       if ic then icon = ic .. " " end
     end
+    local modified = vim.bo[b].modified
     local hl = active and "%#TabLineSel#" or "%#TabLine#"
     local bar = active and "%#PairTabAccent#▎" or "%#TabLine# "
-    local mod = vim.bo[b].modified and "%#PairTabModified# ●" or ""
-    table.insert(parts, ("%s%%%d@v:lua.PairTabGo@%s%s%s%s %%X%%#PairTabClose#%%%d@v:lua.PairTabClose@✕%%X%s "):format(
-      bar, b, hl, esc(icon .. name), mod, active and "%#TabLineSel#" or "", b, "%#TabLine#"))
+    local mod = modified and "%#PairTabModified# ●" or ""
+    local str = ("%s%%%d@v:lua.PairTabGo@%s%s%s%s %%X%%#PairTabClose#%%%d@v:lua.PairTabClose@✕%%X%s "):format(
+      bar, b, hl, esc(icon .. name), mod, active and "%#TabLineSel#" or "", b, "%#TabLine#")
+    -- 화면에서 차지하는 너비(서식 코드는 제외)
+    local width = 1 + vim.fn.strdisplaywidth(icon .. name) + (modified and 2 or 0) + 1 + 1 + 1
+    if active then active_idx = #segs + 1 end
+    table.insert(segs, { str = str, width = width })
   end
+  local n = #segs
+  if n == 0 then return "" end -- 이 창에 탭이 없으면(스크래치·빈 버퍼 등) 그릴 것이 없다
+  local avail = math.max(10, vim.api.nvim_win_get_width(w) - 10) -- 양쪽 "‹12" "12›" 자리를 남긴다
+  local lo, hi, used = active_idx, active_idx, (segs[active_idx] and segs[active_idx].width or 0)
+  local grew = true
+  while grew do
+    grew = false
+    if hi < n and used + segs[hi + 1].width <= avail then hi = hi + 1; used = used + segs[hi].width; grew = true end
+    if lo > 1 and used + segs[lo - 1].width <= avail then lo = lo - 1; used = used + segs[lo].width; grew = true end
+  end
+  local parts = {}
+  if lo > 1 then table.insert(parts, ("%%#PairTabClose# ‹%d "):format(lo - 1)) end
+  for i = lo, hi do table.insert(parts, segs[i].str) end
+  if hi < n then table.insert(parts, ("%%#PairTabClose# %d› "):format(n - hi)) end
   return table.concat(parts) .. "%#TabLineFill#"
 end
 

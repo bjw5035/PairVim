@@ -47,6 +47,7 @@ is_pairvim_repo() {
 backup_existing() {
   [ -e "$CONFIG_DIR" ] || return 0
   if is_pairvim_repo; then
+    # shellcheck disable=SC2088  # 안내 문구의 ~ 는 확장하지 않는 것이 맞다
     echo "~/.config/nvim 은 이미 PairVim 설정입니다. 백업이 필요 없습니다."
     return 0
   fi

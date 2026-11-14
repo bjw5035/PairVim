@@ -61,6 +61,25 @@ pt.close(vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf())
 vim.fn.confirm = old
 check("수정 중이고 취소하면 닫히지 않음", vim.fn.buflisted(dir .. "/b.txt") == 1)
 
+-- 탭이 하나도 없는 창(스크래치 버퍼)에서 탭줄을 그려도 오류가 나지 않는다 (과거 버그: nil 인덱스)
+vim.cmd("new")
+local w3 = vim.api.nvim_get_current_win()
+vim.bo.buftype = "nofile"
+local okr, res = pcall(_G.PairTabs, w3)
+check("탭 없는 창: 탭줄 렌더가 빈 문자열을 돌려줌", okr and res == "", tostring(res))
+-- 탭이 창 너비보다 많을 때 활성 탭이 항상 보이고 양쪽에 숨은 개수가 표시된다
+vim.cmd("only")
+local w4 = vim.api.nvim_get_current_win()
+for i = 1, 60 do
+  local f = ("%s/m%02d.txt"):format(dir, i); vim.fn.writefile({ "m" }, f)
+  vim.cmd("edit " .. f); pt.add(w4, vim.api.nvim_get_current_buf())
+end
+vim.cmd("edit " .. dir .. "/m30.txt")
+local str = _G.PairTabs(w4)
+check("탭 60개: 활성 탭이 포함됨", str:find("m30.txt", 1, true) ~= nil, "")
+check("탭 60개: 양쪽 숨은 개수 표시(‹ 와 ›)", str:find("‹", 1, true) ~= nil and str:find("›", 1, true) ~= nil, "")
+check("탭 60개: 일부만 그림(전부 그리지 않음)", not str:find("m01.txt", 1, true) and not str:find("m60.txt", 1, true), "")
+
 vim.fn.delete(dir, "rf")
 print(("TOTAL %d, FAIL %d"):format(total, fails))
 vim.cmd(fails == 0 and "qa!" or "cq!")
