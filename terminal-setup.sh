@@ -27,7 +27,7 @@ BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
-PROMPT_START='# >>> terminal-setup: prompt colors v1 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v2 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
@@ -300,22 +300,27 @@ print("  (settings.json 의 주석은 저장 과정에서 사라질 수 있습�
 PY
 }
 
-# 프롬프트 색 역할 분리 + 입력한 명령어 강조 색. robbyrussell 모양(➜ 폴더 git:(브랜치) ✗)은 그대로 두고 색만 바꾼다.
-#   ➜ 초록(직전 명령 실패 시 빨강) · 폴더 파랑 굵게 · git:( ) 청록 · 브랜치 분홍(빨강이면 에러처럼 보여서) · ✗ 노랑
+# 프롬프트를 명령어/출력과 확실히 구분한다: 2줄 구조 + 색 배경 블록.
+#   1줄: [ 폴더 ](파랑 배경)  [ 브랜치 ✗ ](분홍 배경)   ← 프롬프트 정보. 입력/출력과 모양이 완전히 다르다
+#   2줄: ❯ (초록, 직전 명령이 실패하면 빨강)   ← 여기서부터가 입력
 #   입력 중인 명령어: 존재하는 명령 초록 굵게, 옵션 주황, 문자열 노랑, 경로 밑줄, 없는 명령 빨강, 주석 회색
 # 색 이름(green, blue ...)은 터미널의 Catppuccin 팔레트로 바뀌어 표시된다. oh-my-zsh 로드 뒤에 실행돼야 하므로 .zshrc 끝에 둔다.
+# 이전 버전 블록이 있으면 시작·끝 표시가 모두 있을 때만 지우고 새 블록으로 바꾼다.
 apply_prompt_colors() {
   [ -f "$ZSHRC" ] || return 0
   if grep -qF "$PROMPT_START" "$ZSHRC"; then echo "프롬프트 색상 이미 적용됨"; return 0; fi
-  echo "프롬프트·명령어 색상 적용"
-  if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 끝에 프롬프트 색상 블록 추가"; return 0; fi
+  echo "프롬프트·명령어 색상 적용(2줄 + 색 배경 블록)"
+  if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 의 프롬프트 색상 블록을 새 버전으로 교체"; return 0; fi
+  if grep -q '^# >>> terminal-setup: prompt colors' "$ZSHRC" && grep -q '^# <<< terminal-setup: prompt colors <<<' "$ZSHRC"; then
+    sed -i '/^# >>> terminal-setup: prompt colors/,/^# <<< terminal-setup: prompt colors <<</d' "$ZSHRC"
+  fi
   cat >>"$ZSHRC" <<'EOF'
-# >>> terminal-setup: prompt colors v1 >>>
-PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%c%f%b $(git_prompt_info)'
-ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
-ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
-ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %F{yellow}%1{✗%}%f"
-ZSH_THEME_GIT_PROMPT_CLEAN="%F{cyan})%f"
+# >>> terminal-setup: prompt colors v2 >>>
+PROMPT=$'%K{blue}%F{#1E1E2E}%B %c %b%f%k $(git_prompt_info)\n%(?:%B%F{green}%1{❯%}%f%b :%B%F{red}%1{❯%}%f%b )'
+ZSH_THEME_GIT_PROMPT_PREFIX="%K{magenta}%F{#1E1E2E}%B  "
+ZSH_THEME_GIT_PROMPT_SUFFIX=" %b%f%k "
+ZSH_THEME_GIT_PROMPT_DIRTY=" %1{✗%}"
+ZSH_THEME_GIT_PROMPT_CLEAN=""
 typeset -gA ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_STYLES[command]='fg=green,bold'
 ZSH_HIGHLIGHT_STYLES[builtin]='fg=green,bold'
