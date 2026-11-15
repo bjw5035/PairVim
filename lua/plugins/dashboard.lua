@@ -16,6 +16,9 @@ return {
     "snacks.nvim",
     opts = function(_, opts)
       opts.dashboard = opts.dashboard or {}
+      -- 시작 화면을 위쪽(2번째 줄)에 고정한다. 기본값(nil)은 창 높이에 맞춘 세로 가운데 정렬이라,
+      -- 시작 직후 창 크기가 바뀌면(터미널 크기 보정 등) 화면이 가만히 있다가 아래로 내려가 보인다.
+      opts.dashboard.row = 2
       opts.dashboard.preset = opts.dashboard.preset or {}
       opts.dashboard.preset.header = [[
           ██████╗  █████╗  ██╗ ██████╗  ██╗   ██╗ ██╗ ███╗   ███╗
