@@ -19,7 +19,7 @@ return {
       -- 시작 화면의 세로 위치: 처음 그릴 때 창 높이로 가운데를 한 번만 계산해 고정한다(아래 섹션 함수).
       -- Snacks 기본값(row = nil)은 다시 그릴 때마다 가운데를 새로 계산해서, 탐색기(Space e)를 열어 창 크기가 바뀌면
       -- 시작 화면이 아래로 밀려 내려갔다. (가로는 창이 좁아지면 가운데를 다시 잡는 것이 정상이다.)
-      local DASH_HEIGHT = 32 -- 시작 화면 전체 줄 수(헤더 6 + 메뉴 + 시작 정보). 섹션을 바꾸면 이 값도 맞춘다.
+      local DASH_HEIGHT = 22 -- 시작 화면 전체 줄 수(헤더 6 + 메뉴 10 + 빈 줄/시작 정보). 섹션을 바꾸면 이 값도 맞춘다.
       opts.dashboard.preset = opts.dashboard.preset or {}
       opts.dashboard.preset.header = [[
           ██████╗  █████╗  ██╗ ██████╗  ██╗   ██╗ ██╗ ███╗   ███╗
@@ -35,7 +35,7 @@ return {
       opts.dashboard.sections = {
         { section = "header" },
         {
-          gap = 1,
+          gap = 0, -- 메뉴 항목 사이 빈 줄 없음(시작 화면 높이를 줄여 낮은 터미널에서도 잘리지 않게)
           padding = 1,
           function(self)
             if not self._pairvim_row then
