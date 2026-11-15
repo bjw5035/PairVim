@@ -7,7 +7,9 @@
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/bjw5035/PairVim/main/bootstrap.sh)"
 # 옵션(뒤에 이어서 붙인다):
 #   --dry-run      아무것도 바꾸지 않고 계획만 출력
-#   --no-pairvim   PairVim(Neovim 직접 빌드, 수 분 걸림)은 설치하지 않음
+#   --no-pairvim   PairVim(Neovim 직접 빌드, 수 분 걸림)은 설치하지 않음(옵션이 없으면 대화형 터미널에서 설치할지 물어본다)
+#   --choose       색상 테마 선택 메뉴를 다시 띄움
+#   --scheme=이름  메뉴 없이 색상 테마 지정(dracula | nord | tokyonight | catppuccin)
 #   --no-theme     색상 테마는 건너뜀
 #   --yes          확인 질문에 모두 예
 set -euo pipefail
@@ -21,13 +23,21 @@ if [ -d "$HOME/.config/nvim/.git" ] && git -C "$HOME/.config/nvim" remote get-ur
   DIR="$HOME/.config/nvim"
 fi
 
-args=() ; with_pairvim=1
+args=() ; with_pairvim=1 ; asked=0 ; assume_yes=0 ; dry=0
 for a in "$@"; do
   case "$a" in
-    --no-pairvim) with_pairvim=0 ;;
+    --no-pairvim) with_pairvim=0; asked=1 ;;
+    --with-pairvim) asked=1; args+=("$a") ;;
+    --yes | -y) assume_yes=1; args+=("$a") ;;
+    --dry-run) dry=1; args+=("$a") ;;
     *) args+=("$a") ;;
   esac
 done
+# PairVim 설치 여부 선택(대화형이고 옵션/--yes/--dry-run 이 없을 때만 묻는다. 기본은 설치)
+if [ "$asked" = 0 ] && [ "$assume_yes" = 0 ] && [ "$dry" = 0 ] && [ -t 0 ] && [ -t 1 ]; then
+  read -r -p "PairVim(Neovim 직접 빌드, 수 분 걸림)도 설치할까요? [Y/n] " ans || ans=Y
+  [[ -z "$ans" || "$ans" =~ ^[Yy]$ ]] || with_pairvim=0
+fi
 [ "$with_pairvim" = 1 ] && args+=(--with-pairvim)
 
 if ! command -v git >/dev/null 2>&1; then

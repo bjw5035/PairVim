@@ -13,21 +13,37 @@
 #   bash terminal-setup.sh                # 적용
 #   bash terminal-setup.sh --yes          # 기본 쉘 변경 등 확인 질문에 모두 예
 #   bash terminal-setup.sh --no-theme     # 색상 테마(ls 색상·창 색상·폰트)는 건너뜀
+#   bash terminal-setup.sh                # 대화형 터미널이면 색상 테마를 번호로 고르는 메뉴가 뜬다(고른 값은 저장돼 다시 묻지 않음)
+#   bash terminal-setup.sh --choose       # 저장된 선택이 있어도 메뉴를 다시 띄운다
+#   bash terminal-setup.sh --scheme=dracula     # 메뉴 없이 직접 지정: dracula | nord | tokyonight | catppuccin(기본)
+#                                               # (iTerm2-Color-Schemes 저장소의 스킴 이름도 그대로 쓸 수 있음)
+#   bash terminal-setup.sh --bg=#1A1B26   # 터미널 배경색만 따로 지정(기본 #282828)
+#   선택한 스킴/배경은 ~/.terminal-setup.conf 에 저장돼, 다음 실행에서 옵션 없이도 유지된다.
 #   bash terminal-setup.sh --with-pairvim # 적용 후 PairVim(install.sh)까지 설치
 #   bash terminal-setup.sh --rollback     # 백업한 설정(.zshrc, tmux/vim, 터미널 색상)으로 되돌리기
-# 옵션: --dry-run --yes --no-theme --with-pairvim --rollback --help
+# 옵션: --dry-run --yes --choose --no-theme --scheme=이름 --bg=색 --with-pairvim --rollback --help
 set -euo pipefail
 
 ZSHRC="$HOME/.zshrc"
 OMZ_DIR="$HOME/.oh-my-zsh"
 THEME="robbyrussell"
 SCHEME_NAME="Catppuccin Mocha"
+BG="#282828"   # 터미널 배경색(--bg=#RRGGBB 로 바꿀 수 있음)
+DEFAULT_BG="#282828"
+BG_SET=0         # 1 이면 스킴의 배경 대신 BG 를 쓴다
+SCHEME_ARG=""    # --scheme 값(비우면 내장 Catppuccin Mocha)
+SCHEME_FILE=""   # 내려받은 스킴 JSON 임시 파일
+CLI_SCHEME=0
+CLI_BG=0
+CHOOSE=0
+CONF_HAS_SCHEME=0
+CONF="$HOME/.terminal-setup.conf"
 LS_START='# >>> terminal-setup: ls colors (catppuccin-mocha v1) >>>'
 BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
-PROMPT_START='# >>> terminal-setup: prompt colors v5 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v6 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
@@ -238,7 +254,97 @@ unset _e _ctp_dir _ctp_ex _ctp_ln _ctp_arc _ctp_media _ctp_code _ctp_cfg _ctp_do
 EOF
 }
 
-# WSL 이면 Windows Terminal 의 settings.json 에 Catppuccin Mocha 스킴을 추가하고 기본 색상 스킴으로 지정한다.
+# 저장해 둔 스킴/배경 읽기(파일을 실행하지 않고 값만 읽는다)
+load_conf() {
+  [ -f "$CONF" ] || return 0
+  local v
+  grep -q '^SCHEME=' "$CONF" && CONF_HAS_SCHEME=1
+  v="$(sed -n 's/^SCHEME=//p' "$CONF" | head -1)"
+  [ -n "$v" ] && SCHEME_ARG="$v"
+  v="$(sed -n 's/^BG=//p' "$CONF" | head -1 | tr 'a-f' 'A-F')"
+  if [[ "$v" =~ ^#[0-9A-F]{6}$ ]]; then BG="$v"; BG_SET=1; fi
+  return 0
+}
+
+# 색상 테마 선택 메뉴. 대화형 터미널이고, --scheme/--yes 가 없고, 저장된 선택이 없을 때(또는 --choose)만 뜬다.
+choose_scheme_menu() {
+  [ "$THEME_ON" = 1 ] || return 0
+  [ "$CLI_SCHEME" = 1 ] && return 0
+  [ "$YES" = 1 ] && return 0
+  if [ "$CONF_HAS_SCHEME" = 1 ] && [ "$CHOOSE" != 1 ]; then return 0; fi
+  [ -t 0 ] && [ -t 1 ] || return 0
+  local ans
+  echo
+  echo "색상 테마를 고르세요:"
+  echo "  1) Catppuccin Mocha  파스텔 톤, 따뜻한 회색 배경 (기본)"
+  echo "  2) Dracula           선명한 보라/분홍/초록"
+  echo "  3) Nord              차분한 회청색"
+  echo "  4) Tokyo Night       짙은 남색"
+  echo "  5) 건너뛰기          색상 테마는 적용하지 않음"
+  while true; do
+    read -r -p "번호를 입력하세요 [1]: " ans || ans=1
+    case "${ans:-1}" in
+      1) SCHEME_ARG="" ;;
+      2) SCHEME_ARG="dracula" ;;
+      3) SCHEME_ARG="nord" ;;
+      4) SCHEME_ARG="tokyonight" ;;
+      5) THEME_ON=0 ;;
+      *) echo "1~5 중에서 고르세요."; continue ;;
+    esac
+    break
+  done
+  # 메뉴로 고른 경우 저장돼 있던 배경은 버리고 스킴의 배경을 쓴다
+  BG_SET=0; BG="$DEFAULT_BG"
+  return 0
+}
+
+save_conf() {
+  [ "$DRY" = 1 ] && return 0
+  {
+    echo "SCHEME=$SCHEME_ARG"
+    [ "$BG_SET" = 1 ] && echo "BG=$BG"
+  } >"$CONF"
+  return 0
+}
+
+# --scheme 이름을 iTerm2-Color-Schemes 저장소의 Windows Terminal JSON 으로 받아 형식을 검사한다.
+# 이름이 비었거나 catppuccin 이면 내장 스킴을 쓴다.
+resolve_scheme() {
+  SCHEME_FILE=""
+  local key fname url tmp
+  key="$(printf '%s' "$SCHEME_ARG" | tr 'A-Z' 'a-z' | tr -d ' _-')"
+  case "$key" in
+    "" | catppuccin | catppuccinmocha | default) SCHEME_ARG=""; return 0 ;;
+    dracula) fname="Dracula" ;;
+    nord) fname="Nord" ;;
+    tokyonight | tokyo) fname="TokyoNight" ;;
+    *) fname="$SCHEME_ARG" ;;
+  esac
+  if ! [[ "$fname" =~ ^[A-Za-z0-9\ +._-]+$ ]]; then echo "--scheme 이름에 쓸 수 없는 문자가 있습니다: $fname" >&2; exit 2; fi
+  url="https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/windowsterminal/${fname// /%20}.json"
+  echo "색상 스킴 '$fname' 받는 중..."
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ts-scheme.XXXXXX")"
+  if ! curl -fsSL "$url" -o "$tmp"; then
+    echo "스킴 '$fname' 을 받지 못했습니다. 이름을 확인하세요: https://github.com/mbadolato/iTerm2-Color-Schemes/tree/master/windowsterminal" >&2
+    rm -f "$tmp"; exit 1
+  fi
+  if ! python3 -I - "$tmp" <<'PY'
+import json, re, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+keys = ["black","red","green","yellow","blue","purple","cyan","white",
+        "brightBlack","brightRed","brightGreen","brightYellow","brightBlue","brightPurple","brightCyan","brightWhite",
+        "background","foreground"]
+assert isinstance(d.get("name"), str) and d["name"]
+for k in keys:
+    assert re.fullmatch(r"#[0-9a-fA-F]{6}", d.get(k, "")), k
+PY
+  then
+    echo "스킴 파일 형식이 올바르지 않아 건너뜁니다." >&2; rm -f "$tmp"; exit 1
+  fi
+  SCHEME_FILE="$tmp"
+}
+
+# WSL 이면 Windows Terminal 의 settings.json 에 색상 스킴(기본 Catppuccin Mocha, --scheme 으로 변경)을 추가하고 기본 색상 스킴으로 지정한다.
 # 그 외 설정(폰트·투명도 등)은 건드리지 않는다. 바꿀 때만 백업한다. (WT_SETTINGS 환경변수로 경로를 직접 줄 수 있다)
 apply_windows_terminal() {
   local f="${WT_SETTINGS:-}"
@@ -252,18 +358,24 @@ apply_windows_terminal() {
   fi
   if [ -z "$f" ] || [ ! -f "$f" ]; then echo "Windows Terminal settings.json 을 찾지 못해 건너뜁니다."; return 0; fi
   echo "Windows Terminal 설정: $f"
-  python3 -I - "$f" "$DRY" "$SCHEME_NAME" "$WT_BACKUP_MARK" <<'PY'
+  python3 -I - "$f" "$DRY" "$SCHEME_NAME" "$WT_BACKUP_MARK" "$BG" "$SCHEME_FILE" "$BG_SET" <<'PY'
 import json, re, shutil, sys, time
-path, dry, name, mark = sys.argv[1], sys.argv[2] == "1", sys.argv[3], sys.argv[4]
+path, dry, name, mark, bg = sys.argv[1], sys.argv[2] == "1", sys.argv[3], sys.argv[4], sys.argv[5]
 scheme = {
     "name": name,
-    "background": "#11111B", "foreground": "#CDD6F4",
+    "background": bg, "foreground": "#CDD6F4",
     "cursorColor": "#F5E0DC", "selectionBackground": "#585B70",
     "black": "#45475A", "red": "#F38BA8", "green": "#A6E3A1", "yellow": "#F9E2AF",
     "blue": "#89B4FA", "purple": "#F5C2E7", "cyan": "#94E2D5", "white": "#BAC2DE",
     "brightBlack": "#585B70", "brightRed": "#F38BA8", "brightGreen": "#A6E3A1", "brightYellow": "#F9E2AF",
     "brightBlue": "#89B4FA", "brightPurple": "#F5C2E7", "brightCyan": "#94E2D5", "brightWhite": "#A6ADC8",
 }
+scheme_file, bg_set = sys.argv[6], sys.argv[7] == "1"
+if scheme_file:
+    scheme = json.load(open(scheme_file, encoding="utf-8"))
+    name = scheme["name"]
+    if bg_set:
+        scheme["background"] = bg
 text = open(path, encoding="utf-8-sig").read()
 try:
     clean = re.sub(r"^\s*//.*$", "", text, flags=re.M)
@@ -301,7 +413,8 @@ PY
 }
 
 # 프롬프트를 명령어/출력과 구분한다: 한 줄, 배경 블록 없이 색 글자만 쓴다.
-#   ➜ 경로(파랑 굵게) git:(브랜치 분홍) ✗(노랑) 입력   ← ➜ 는 초록(직전 명령이 실패하면 빨강). robbyrussell 원래 모양
+#   ➜ 경로(파랑 굵게) git:(브랜치 분홍) ✗(노랑) λ 입력   ← ➜ 는 초록, λ 는 연보라(직전 명령이 실패하면 둘 다 빨강)
+#   λ 가 프롬프트와 입력의 경계다(없으면 경로와 입력이 붙어 보여 구분이 어렵다).
 #   경로는 최근 3단계(/mnt/c 처럼)까지 보여 준다. 입력은 아래 구문 강조 색으로 프롬프트와 구분된다.
 #   입력 중인 명령어: 존재하는 명령 초록 굵게, 옵션 주황, 문자열 노랑, 경로 밑줄, 없는 명령 빨강, 주석 회색
 # 색 이름(green, blue ...)은 터미널의 Catppuccin 팔레트로 바뀌어 표시된다. oh-my-zsh 로드 뒤에 실행돼야 하므로 .zshrc 끝에 둔다.
@@ -315,8 +428,8 @@ apply_prompt_colors() {
     sed -i '/^# >>> terminal-setup: prompt colors/,/^# <<< terminal-setup: prompt colors <<</d' "$ZSHRC"
   fi
   cat >>"$ZSHRC" <<'EOF'
-# >>> terminal-setup: prompt colors v5 >>>
-PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%3~%f%b $(git_prompt_info)'
+# >>> terminal-setup: prompt colors v6 >>>
+PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%3~%f%b $(git_prompt_info)%(?:%B%F{#B4BEFE}λ%f%b :%B%F{red}λ%f%b ) '
 ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
 ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %F{yellow}%1{✗%}%f"
@@ -416,8 +529,23 @@ apply_gnome_terminal() {
   [ -n "$uuid" ] || { echo "GNOME Terminal 기본 프로필을 찾지 못해 건너뜁니다."; return 0; }
   schema="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$uuid/"
   cur="$(gsettings get "$schema" background-color 2>/dev/null | tr -d "'" | tr 'a-f' 'A-F')"
-  if [ "$cur" = "#11111B" ]; then echo "GNOME Terminal 이미 Catppuccin Mocha"; return 0; fi
-  echo "GNOME Terminal 색상을 Catppuccin Mocha 로 설정(프로필 $uuid)"
+  local gbg="$BG" gfg='#CDD6F4' gpal="['#45475A','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#BAC2DE','#585B70','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#A6ADC8']"
+  if [ -n "$SCHEME_FILE" ]; then
+    local g
+    mapfile -t g < <(python3 -I - "$SCHEME_FILE" "$BG_SET" "$BG" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+bg = sys.argv[3] if sys.argv[2] == "1" else s["background"]
+order = ["black","red","green","yellow","blue","purple","cyan","white",
+         "brightBlack","brightRed","brightGreen","brightYellow","brightBlue","brightPurple","brightCyan","brightWhite"]
+print(bg.upper()); print(s["foreground"].upper())
+print("[" + ",".join("'%s'" % s[k].upper() for k in order) + "]")
+PY
+)
+    gbg="${g[0]}"; gfg="${g[1]}"; gpal="${g[2]}"
+  fi
+  if [ "$cur" = "$gbg" ]; then echo "GNOME Terminal 이미 같은 색상($gbg)"; return 0; fi
+  echo "GNOME Terminal 색상 설정(프로필 $uuid, 배경 $gbg)"
   if [ "$DRY" = 1 ]; then echo "[dry-run] gsettings set $schema (배경/글자/팔레트)"; return 0; fi
   {
     echo "uuid=$uuid"
@@ -427,9 +555,9 @@ apply_gnome_terminal() {
     done
   } >"$GNOME_BACKUP"
   gsettings set "$schema" use-theme-colors false
-  gsettings set "$schema" background-color '#11111B'
-  gsettings set "$schema" foreground-color '#CDD6F4'
-  gsettings set "$schema" palette "['#45475A','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#BAC2DE','#585B70','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#A6ADC8']"
+  gsettings set "$schema" background-color "$gbg"
+  gsettings set "$schema" foreground-color "$gfg"
+  gsettings set "$schema" palette "$gpal"
   echo "  완료. 이미 열려 있는 터미널 창에는 바로 반영됩니다. 터미널 프로필 설정에서 폰트를 'JetBrainsMono Nerd Font' 로 고르세요."
 }
 
@@ -518,22 +646,34 @@ rollback() {
 
 main() {
   local with_pairvim=0 action=apply a
+  load_conf
   for a in "$@"; do
     case "$a" in
       --dry-run) DRY=1 ;;
       --yes | -y) YES=1 ;;
       --no-theme) THEME_ON=0 ;;
+      --choose) CHOOSE=1 ;;
+      --scheme=*) SCHEME_ARG="${a#--scheme=}"; CLI_SCHEME=1 ;;
+      --bg=*)
+        BG_SET=1; CLI_BG=1
+        BG="$(printf '%s' "${a#--bg=}" | tr 'a-f' 'A-F')"
+        [[ "$BG" =~ ^#[0-9A-F]{6}$ ]] || { echo "--bg 는 #RRGGBB 형식이어야 합니다(예: --bg=#1A1B26)" >&2; exit 2; }
+        ;;
       --with-pairvim) with_pairvim=1; WITH_PAIRVIM=1 ;;
       --rollback) action=rollback ;;
       --help | -h) usage; exit 0 ;;
       *) echo "알 수 없는 옵션: $a" >&2; usage; exit 2 ;;
     esac
   done
+  # --scheme 만 새로 줬고 --bg 는 안 줬으면, 저장돼 있던 배경은 버리고 스킴의 배경을 쓴다
+  if [ "$CLI_SCHEME" = 1 ] && [ "$CLI_BG" = 0 ]; then BG_SET=0; BG="$DEFAULT_BG"; fi
   if [ "$action" = rollback ]; then rollback; exit 0; fi
+  choose_scheme_menu
 
   echo "== 터미널 설정 시작 =="
   ensure_sudo
   ensure_packages
+  if [ "$THEME_ON" = 1 ]; then resolve_scheme; fi
   ensure_omz
   # 변경할 내용이 있을 때만 백업한다(안 그러면 재실행이 원본 백업을 덮어써 롤백이 무의미해짐)
   zshrc_needs_change && backup_zshrc
@@ -548,6 +688,8 @@ main() {
     apply_windows_terminal
     apply_gnome_terminal
     ensure_font
+    save_conf
+    if [ -n "$SCHEME_FILE" ]; then rm -f "$SCHEME_FILE"; fi
   fi
   ensure_eza
   setup_dotfiles
