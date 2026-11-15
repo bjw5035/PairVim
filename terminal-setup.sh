@@ -43,7 +43,7 @@ BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
-PROMPT_START='# >>> terminal-setup: prompt colors v9 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v10 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
@@ -413,9 +413,8 @@ PY
 }
 
 # 프롬프트를 명령어/출력과 구분한다: 한 줄, 배경 블록 없이 색 글자만 쓴다.
-#   왼쪽: ➜  입력                      ← ➜ 는 초록(직전 명령이 실패하면 빨강). 입력은 항상 깨끗하게 구분된다
-#   오른쪽 끝: 폴더 git:(브랜치) ✗     ← 폴더는 마지막 이름만(파랑 굵게), git:( ) 청록, 브랜치 분홍, ✗ 노랑 굵게
-#   경로·git 정보를 오른쪽(RPROMPT)으로 보내서 입력과 섞이지 않게 한다. 터미널 폭이 좁으면 zsh 가 자동으로 숨긴다.
+#   ➜  폴더 git:(브랜치) ✗ 입력   ← robbyrussell 원래 모양(이미지 그대로). ➜ 는 초록(직전 명령이 실패하면 빨강)
+#   폴더는 마지막 이름만(파랑 굵게), git:( ) 청록, 브랜치 분홍, ✗ 노랑 굵게. 색은 터미널 스킴을 따른다.
 #   경로는 최근 3단계(/mnt/c 처럼)까지 보여 준다. 입력은 아래 구문 강조 색으로 프롬프트와 구분된다.
 #   입력 중인 명령어: 존재하는 명령 초록 굵게, 옵션 주황, 문자열 노랑, 경로 밑줄, 없는 명령 빨강, 주석 회색
 # 색 이름(green, blue ...)은 터미널의 Catppuccin 팔레트로 바뀌어 표시된다. oh-my-zsh 로드 뒤에 실행돼야 하므로 .zshrc 끝에 둔다.
@@ -429,11 +428,10 @@ apply_prompt_colors() {
     sed -i '/^# >>> terminal-setup: prompt colors/,/^# <<< terminal-setup: prompt colors <<</d' "$ZSHRC"
   fi
   cat >>"$ZSHRC" <<'EOF'
-# >>> terminal-setup: prompt colors v9 >>>
-PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) '
-RPROMPT='%B%F{blue}%c%f%b $(git_prompt_info)'
+# >>> terminal-setup: prompt colors v10 >>>
+PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%c%f%b $(git_prompt_info)'
 ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
-ZSH_THEME_GIT_PROMPT_SUFFIX="%f"
+ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
 ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %B%F{yellow}%1{✗%}%f%b"
 ZSH_THEME_GIT_PROMPT_CLEAN="%F{cyan})%f"
 typeset -gA ZSH_HIGHLIGHT_STYLES
