@@ -16,10 +16,10 @@ return {
     "snacks.nvim",
     opts = function(_, opts)
       opts.dashboard = opts.dashboard or {}
-      -- 시작 화면을 위에서 5번째 줄에 고정한다. 기본값(nil)은 창 높이에 맞춘 세로 가운데 정렬이라,
-      -- 시작 직후 창 크기가 바뀌면(터미널 크기 보정 등) 화면이 가만히 있다가 아래로 내려가 보인다.
-      -- 값을 키우면 더 아래로, 줄이면 더 위로 붙는다(시작 화면 전체가 32줄이라 너무 키우면 아래가 잘린다).
-      opts.dashboard.row = 5
+      -- 시작 화면의 세로 위치: 처음 그릴 때 창 높이로 가운데를 한 번만 계산해 고정한다(아래 섹션 함수).
+      -- Snacks 기본값(row = nil)은 다시 그릴 때마다 가운데를 새로 계산해서, 탐색기(Space e)를 열어 창 크기가 바뀌면
+      -- 시작 화면이 아래로 밀려 내려갔다. (가로는 창이 좁아지면 가운데를 다시 잡는 것이 정상이다.)
+      local DASH_HEIGHT = 32 -- 시작 화면 전체 줄 수(헤더 6 + 메뉴 + 시작 정보). 섹션을 바꾸면 이 값도 맞춘다.
       opts.dashboard.preset = opts.dashboard.preset or {}
       opts.dashboard.preset.header = [[
           ██████╗  █████╗  ██╗ ██████╗  ██╗   ██╗ ██╗ ███╗   ███╗
@@ -38,6 +38,10 @@ return {
           gap = 1,
           padding = 1,
           function(self)
+            if not self._pairvim_row then
+              self._pairvim_row = math.max(math.floor((self._size.height - DASH_HEIGHT) / 2), 0)
+            end
+            self.opts.row = self._pairvim_row
             local keys = vim.deepcopy(self.opts.preset.keys or {})
             local item = require("config.pair").dash_item()
             local pos = #keys + 1

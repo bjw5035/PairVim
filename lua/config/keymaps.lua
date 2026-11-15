@@ -57,10 +57,24 @@ vim.keymap.set("n", "<leader>\\", function()
     -- 파일 창은 하나, 탭이 여럿: 전부 닫지 않고 지금 탭만 닫는다.
     pt.close()
   else
-    -- 마지막 파일 창의 마지막 탭이면 nvim을 종료한다(저장 안 한 파일이 있으면 물어본다)
-    vim.cmd("confirm qall")
+    -- 마지막 파일: nvim 은 종료하지 않고 그 파일만 닫는다(저장 안 한 변경은 pane-tabs 가 물어본다).
+    -- 닫은 자리에는 시작 화면을 보여 주고, 탐색기가 열려 있으면 그쪽으로 포커스를 옮긴다.
+    local before = vim.api.nvim_win_get_buf(win)
+    pt.close(win)
+    -- 저장 확인에서 취소했으면(같은 버퍼가 그대로) 아무것도 하지 않는다
+    if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == before then return end
+    local ok, snacks = pcall(require, "snacks")
+    if ok and snacks.dashboard and vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_call(win, function() pcall(snacks.dashboard.open) end)
+    end
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_picker_list" then
+        vim.api.nvim_set_current_win(w)
+        return
+      end
+    end
   end
-end, { desc = "창 닫기 (탭이 여럿이면 탭만, 마지막이면 종료)" })
+end, { desc = "창 닫기 (탭이 여럿이면 탭만, 마지막 파일이면 그 파일만 닫고 탐색기로)" })
 
 -- 탭(버퍼) 이동/닫기를 Shift+h/l 대신 더 직관적인 Tab 키로 (브라우저 탭 전환과 같은 느낌)
 -- 탭은 창마다 따로다: 이동·닫기는 현재 창의 탭 목록 안에서만 한다.
