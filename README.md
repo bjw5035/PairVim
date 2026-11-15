@@ -19,7 +19,7 @@
 | 고친 뒤 바로 확인 | `F3`(또는 `Space t t`)으로 하단 셸을 열어 평소 명령을 실행. 테라폼이면 `Space t v`/`t f`/`t p` |
 | 서버에 들어가 작업 | 하단 셸에서 `ssh ...` — 같은 터미널 안에서 에디터와 셸을 오갑니다 |
 | 노트·문서(Markdown) 편집 | 노트 폴더에서 `pairvim .`, AI 패널에 "이 노트 정리해 줘" |
-| 작업을 닫았다가 이어하기 | 인자 없이 `pairvim` — 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됨 |
+| 작업을 닫았다가 이어하기 | 그 폴더에서 인자 없이 `pairvim` → 시작 화면에서 `s`(세션 복원) — 마지막에 닫은 창·파일·탭이 복원됨 |
 
 여러 PC(집, 회사, 맥북)에서 **같은 설정**을 쓰는 것이 목적입니다. 새 PC에서는 **설치** 절의 방법으로 한 번 설치하고, 이후 변경은 시작 화면의 `u`(PairVim 업데이트)로 받습니다.
 
@@ -249,7 +249,7 @@ echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc   # bash면 ~/.bash
 
 맥북이면 `F2`/`F3`/`F4` 대신 `Space a a` / `Space t t` / `Ctrl-\ Ctrl-n` 를 쓰면 `Fn` 키가 필요 없습니다.
 
-상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`만 켜면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다.
+상태줄에는 `AWS_PROFILE`과 terraform 워크스페이스(`.terraform/environment`)가 표시됩니다. 인자 없이 `pairvim`을 켜면 시작 화면이 나오고, `s`(세션 복원)를 누르면 그 폴더에서 마지막에 닫은 창·파일·탭이 복원됩니다. 시작할 때 자동으로 복원하지는 않습니다(자동 복원은 설정에서 `vim.g.pairvim_auto_restore = true`).
 
 `Space w` 그룹(분할/이동/창목록이 섞여있음)은 헷갈리니 그냥 안 쓰는 걸 추천.
 

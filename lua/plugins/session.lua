@@ -1,5 +1,6 @@
--- 세션 복원: 인자 없이 nvim 을 켜면 이 폴더에서 마지막에 닫은 상태(창 배치·열린 파일·창별 탭)로 돌아온다.
--- 파일을 인자로 주면(nvim a.tf) 복원하지 않는다.
+-- 세션 저장/복원: 닫을 때 이 폴더의 상태(창 배치·열린 파일·창별 탭)를 저장하고, 시작 화면의 s(세션 복원)로 불러온다.
+-- 시작할 때 자동으로 불러오지는 않는다(기본). 자동 복원은 vim.g.pairvim_auto_restore = true 로 켠다.
+-- 파일을 인자로 주면(nvim a.tf) 자동 복원이 켜져 있어도 복원하지 않는다.
 return {
   {
     "folke/persistence.nvim",
@@ -53,6 +54,9 @@ return {
         group = group,
         nested = true,
         callback = function()
+          -- 기본은 자동 복원 안 함(시작 화면이 갑자기 파일 화면으로 바뀌며 마지막 위치로 스크롤되는 것을 막는다).
+          -- 이어서 작업하려면 시작 화면의 s(세션 복원). 예전처럼 자동 복원하려면 init 에서 vim.g.pairvim_auto_restore = true
+          if not vim.g.pairvim_auto_restore then return end
           if vim.fn.argc() ~= 0 or vim.g.pairvim_no_restore then return end
           if vim.fn.line2byte("$") ~= -1 then return end -- 표준입력으로 들어온 내용이 있으면 복원 안 함
           vim.schedule(function()
