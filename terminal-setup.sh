@@ -27,7 +27,7 @@ BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
-PROMPT_START='# >>> terminal-setup: prompt colors v2 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v5 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
@@ -257,7 +257,7 @@ import json, re, shutil, sys, time
 path, dry, name, mark = sys.argv[1], sys.argv[2] == "1", sys.argv[3], sys.argv[4]
 scheme = {
     "name": name,
-    "background": "#1E1E2E", "foreground": "#CDD6F4",
+    "background": "#11111B", "foreground": "#CDD6F4",
     "cursorColor": "#F5E0DC", "selectionBackground": "#585B70",
     "black": "#45475A", "red": "#F38BA8", "green": "#A6E3A1", "yellow": "#F9E2AF",
     "blue": "#89B4FA", "purple": "#F5C2E7", "cyan": "#94E2D5", "white": "#BAC2DE",
@@ -300,27 +300,27 @@ print("  (settings.json 의 주석은 저장 과정에서 사라질 수 있습�
 PY
 }
 
-# 프롬프트를 명령어/출력과 확실히 구분한다: 2줄 구조 + 색 배경 블록.
-#   1줄: [ 폴더 ](파랑 배경)  [ 브랜치 ✗ ](분홍 배경)   ← 프롬프트 정보. 입력/출력과 모양이 완전히 다르다
-#   2줄: ❯ (초록, 직전 명령이 실패하면 빨강)   ← 여기서부터가 입력
+# 프롬프트를 명령어/출력과 구분한다: 한 줄, 배경 블록 없이 색 글자만 쓴다.
+#   ➜ 경로(파랑 굵게) git:(브랜치 분홍) ✗(노랑) 입력   ← ➜ 는 초록(직전 명령이 실패하면 빨강). robbyrussell 원래 모양
+#   경로는 최근 3단계(/mnt/c 처럼)까지 보여 준다. 입력은 아래 구문 강조 색으로 프롬프트와 구분된다.
 #   입력 중인 명령어: 존재하는 명령 초록 굵게, 옵션 주황, 문자열 노랑, 경로 밑줄, 없는 명령 빨강, 주석 회색
 # 색 이름(green, blue ...)은 터미널의 Catppuccin 팔레트로 바뀌어 표시된다. oh-my-zsh 로드 뒤에 실행돼야 하므로 .zshrc 끝에 둔다.
 # 이전 버전 블록이 있으면 시작·끝 표시가 모두 있을 때만 지우고 새 블록으로 바꾼다.
 apply_prompt_colors() {
   [ -f "$ZSHRC" ] || return 0
   if grep -qF "$PROMPT_START" "$ZSHRC"; then echo "프롬프트 색상 이미 적용됨"; return 0; fi
-  echo "프롬프트·명령어 색상 적용(2줄 + 색 배경 블록)"
+  echo "프롬프트·명령어 색상 적용(한 줄, 색 글자)"
   if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 의 프롬프트 색상 블록을 새 버전으로 교체"; return 0; fi
   if grep -q '^# >>> terminal-setup: prompt colors' "$ZSHRC" && grep -q '^# <<< terminal-setup: prompt colors <<<' "$ZSHRC"; then
     sed -i '/^# >>> terminal-setup: prompt colors/,/^# <<< terminal-setup: prompt colors <<</d' "$ZSHRC"
   fi
   cat >>"$ZSHRC" <<'EOF'
-# >>> terminal-setup: prompt colors v2 >>>
-PROMPT=$'%K{blue}%F{#1E1E2E}%B %c %b%f%k $(git_prompt_info)\n%(?:%B%F{green}%1{❯%}%f%b :%B%F{red}%1{❯%}%f%b )'
-ZSH_THEME_GIT_PROMPT_PREFIX="%K{magenta}%F{#1E1E2E}%B  "
-ZSH_THEME_GIT_PROMPT_SUFFIX=" %b%f%k "
-ZSH_THEME_GIT_PROMPT_DIRTY=" %1{✗%}"
-ZSH_THEME_GIT_PROMPT_CLEAN=""
+# >>> terminal-setup: prompt colors v5 >>>
+PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%3~%f%b $(git_prompt_info)'
+ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
+ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
+ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %F{yellow}%1{✗%}%f"
+ZSH_THEME_GIT_PROMPT_CLEAN="%F{cyan})%f"
 typeset -gA ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_STYLES[command]='fg=green,bold'
 ZSH_HIGHLIGHT_STYLES[builtin]='fg=green,bold'
@@ -416,7 +416,7 @@ apply_gnome_terminal() {
   [ -n "$uuid" ] || { echo "GNOME Terminal 기본 프로필을 찾지 못해 건너뜁니다."; return 0; }
   schema="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$uuid/"
   cur="$(gsettings get "$schema" background-color 2>/dev/null | tr -d "'" | tr 'a-f' 'A-F')"
-  if [ "$cur" = "#1E1E2E" ]; then echo "GNOME Terminal 이미 Catppuccin Mocha"; return 0; fi
+  if [ "$cur" = "#11111B" ]; then echo "GNOME Terminal 이미 Catppuccin Mocha"; return 0; fi
   echo "GNOME Terminal 색상을 Catppuccin Mocha 로 설정(프로필 $uuid)"
   if [ "$DRY" = 1 ]; then echo "[dry-run] gsettings set $schema (배경/글자/팔레트)"; return 0; fi
   {
@@ -427,7 +427,7 @@ apply_gnome_terminal() {
     done
   } >"$GNOME_BACKUP"
   gsettings set "$schema" use-theme-colors false
-  gsettings set "$schema" background-color '#1E1E2E'
+  gsettings set "$schema" background-color '#11111B'
   gsettings set "$schema" foreground-color '#CDD6F4'
   gsettings set "$schema" palette "['#45475A','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#BAC2DE','#585B70','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#A6ADC8']"
   echo "  완료. 이미 열려 있는 터미널 창에는 바로 반영됩니다. 터미널 프로필 설정에서 폰트를 'JetBrainsMono Nerd Font' 로 고르세요."
