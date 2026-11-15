@@ -4,15 +4,18 @@
 # - 이미 Starship 등이 설정된 PC(회사 PC): ~/.zshrc 를 백업한 뒤 테마만 robbyrussell 로 바꾸고 Starship 초기화 줄은 주석 처리한다(Starship 은 지우지 않음).
 # - 색상 테마: ls 색상(LS_COLORS)을 Catppuccin Mocha 로 교체하고, WSL 이면 Windows Terminal 색상 스킴도 적용한다.
 #   입력한 명령어와 출력이 구분되도록 zsh-syntax-highlighting 과 프롬프트 앞 빈 줄도 넣는다.
+#   순수 Ubuntu 데스크탑이면 GNOME Terminal 색상과 JetBrainsMono Nerd Font 도 설정한다.
+# - 환경: 자주 쓰는 alias(vi/ls/win/gs)와 PATH, eza, tmux·vim 설정(dotfiles/), 기본 쉘을 zsh 로 변경.
 # 여러 번 실행해도 안전하다(이미 적용됐으면 건너뜀). 바꾸기 전에 항상 백업한다.
 #
 # 사용:
 #   bash terminal-setup.sh --dry-run      # 아무것도 바꾸지 않고 계획만 출력
 #   bash terminal-setup.sh                # 적용
-#   bash terminal-setup.sh --no-theme     # 색상 테마(ls 색상 + Windows Terminal)는 건너뜀
+#   bash terminal-setup.sh --yes          # 기본 쉘 변경 등 확인 질문에 모두 예
+#   bash terminal-setup.sh --no-theme     # 색상 테마(ls 색상·창 색상·폰트)는 건너뜀
 #   bash terminal-setup.sh --with-pairvim # 적용 후 PairVim(install.sh)까지 설치
-#   bash terminal-setup.sh --rollback     # ~/.zshrc 와 Windows Terminal 설정을 마지막 백업으로 되돌리기
-# 옵션: --dry-run --no-theme --with-pairvim --rollback --help
+#   bash terminal-setup.sh --rollback     # 백업한 설정(.zshrc, tmux/vim, 터미널 색상)으로 되돌리기
+# 옵션: --dry-run --yes --no-theme --with-pairvim --rollback --help
 set -euo pipefail
 
 ZSHRC="$HOME/.zshrc"
@@ -23,12 +26,48 @@ LS_START='# >>> terminal-setup: ls colors (catppuccin-mocha v1) >>>'
 BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v1 >>>'
+DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
+GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
+YES=0
 THEME_ON=1
+WITH_PAIRVIM=0
+SUDO_KEEPALIVE_PID=""
 
 run() { if [ "$DRY" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
-usage() { sed -n 2,17p "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# root 로 실행 중이면 sudo 가 필요 없다(컨테이너 등)
+if [ "$(id -u)" = 0 ]; then SUDO=""; else SUDO="sudo"; fi
+
+# WSL 인가? (시험용으로 TS_FORCE_WSL=0/1 로 바꿀 수 있다)
+is_wsl() {
+  case "${TS_FORCE_WSL:-}" in 1) return 0 ;; 0) return 1 ;; esac
+  grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# 관리자 권한(apt 설치, 기본 쉘 변경)이 필요한 작업이 있으면 시작할 때 비밀번호를 한 번 묻고, 긴 설치 동안 인증이 만료되지 않게 유지한다.
+needs_sudo() {
+  [ "$WITH_PAIRVIM" = 1 ] && return 0
+  local c
+  for c in zsh git curl python3 tmux vim unzip fc-cache eza; do command -v "$c" >/dev/null 2>&1 || return 0; done
+  [ "$(getent passwd "$(id -un)" | cut -d: -f7)" = "$(command -v zsh)" ] || return 0
+  return 1
+}
+ensure_sudo() {
+  [ -n "$SUDO" ] && [ "$DRY" != 1 ] || return 0
+  needs_sudo || return 0
+  if sudo -n true 2>/dev/null; then :; else
+    echo "관리자 권한이 필요한 작업(패키지 설치, 기본 쉘 변경)이 있습니다. 비밀번호를 입력하세요."
+    sudo -v || { echo "관리자 인증에 실패했습니다. 'sudo' 권한이 있는 계정으로 다시 실행하세요." >&2; exit 1; }
+  fi
+  ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 50; done ) &
+  SUDO_KEEPALIVE_PID=$!
+  trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+}
+
+usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; }
 
 ensure_packages() {
   local pkgs=()
@@ -36,21 +75,25 @@ ensure_packages() {
   command -v git >/dev/null 2>&1 || pkgs+=(git)
   command -v curl >/dev/null 2>&1 || pkgs+=(curl)
   command -v python3 >/dev/null 2>&1 || pkgs+=(python3)
-  if [ "${#pkgs[@]}" -eq 0 ]; then echo "zsh/git/curl/python3 이미 설치됨"; return 0; fi
+  command -v tmux >/dev/null 2>&1 || pkgs+=(tmux)
+  command -v vim >/dev/null 2>&1 || pkgs+=(vim)
+  command -v unzip >/dev/null 2>&1 || pkgs+=(unzip)
+  command -v fc-cache >/dev/null 2>&1 || pkgs+=(fontconfig)
+  if [ "${#pkgs[@]}" -eq 0 ]; then echo "필수 패키지 이미 설치됨"; return 0; fi
   if ! command -v apt >/dev/null 2>&1; then
     echo "apt 가 없습니다. ${pkgs[*]} 를 직접 설치한 뒤 다시 실행하세요." >&2
     exit 1
   fi
   echo "설치할 패키지: ${pkgs[*]}"
-  run sudo apt update
-  run sudo apt install -y "${pkgs[@]}"
+  run $SUDO apt update
+  run $SUDO apt install -y "${pkgs[@]}"
 }
 
 ensure_omz() {
   if [ -d "$OMZ_DIR" ]; then echo "Oh My Zsh 이미 설치됨"; return 0; fi
   echo "Oh My Zsh 설치 중(기본 쉘 변경·zsh 자동 실행 없음)..."
   if [ "$DRY" = 1 ]; then echo "[dry-run] Oh My Zsh 설치 스크립트 실행"; return 0; fi
-  RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
+  env -u ZSH RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 }
 
@@ -108,6 +151,8 @@ zshrc_needs_change() {
     grep -qF "$LS_START" "$ZSHRC" || return 0
     grep -qF "$SPACING_START" "$ZSHRC" || return 0
     grep -qE "^plugins=\(.*$SYN_NAME" "$ZSHRC" || return 0
+    grep -qF "$EXTRAS_START" "$ZSHRC" || return 0
+    grep -qF "$PROMPT_START" "$ZSHRC" || return 0
   fi
   return 1
 }
@@ -198,7 +243,7 @@ EOF
 apply_windows_terminal() {
   local f="${WT_SETTINGS:-}"
   if [ -z "$f" ]; then
-    grep -qi microsoft /proc/version 2>/dev/null || { echo "WSL 이 아니라 Windows Terminal 설정은 건너뜁니다."; return 0; }
+    is_wsl || { echo "WSL 이 아니라 Windows Terminal 설정은 건너뜁니다."; return 0; }
     local c
     for c in /mnt/c/Users/*/AppData/Local/Packages/Microsoft.WindowsTerminal_*/LocalState/settings.json \
       /mnt/c/Users/*/AppData/Local/Packages/Microsoft.WindowsTerminalPreview_*/LocalState/settings.json; do
@@ -229,26 +274,206 @@ except Exception as e:
 schemes = data.setdefault("schemes", [])
 defaults = data.setdefault("profiles", {}).setdefault("defaults", {})
 have = next((s for s in schemes if s.get("name") == name), None)
-if have == scheme and defaults.get("colorScheme") == name:
-    print(f"Windows Terminal 은 이미 '{name}' 적용됨")
+# 배경이 비치면 색이 탁해 보이므로 불투명(투명도 100, 아크릴 끔)으로 맞춘다
+solid = defaults.get("opacity") == 100 and defaults.get("useAcrylic") is False
+if have == scheme and defaults.get("colorScheme") == name and solid:
+    print(f"Windows Terminal 은 이미 '{name}' + 불투명 배경 적용됨")
     sys.exit(0)
 for p in data["profiles"].get("list", []):
     if p.get("colorScheme") and p["colorScheme"] != name:
         print(f"  참고: 프로필 '{p.get('name')}' 은 자체 색상 스킴({p['colorScheme']})이 지정돼 있어 기본값이 적용되지 않습니다.")
 if dry:
-    print(f"[dry-run] '{name}' 스킴 추가/갱신 후 기본 색상 스킴으로 지정(백업 후 {path} 수정)")
+    print(f"[dry-run] '{name}' 스킴 추가/갱신 + 불투명 배경(투명도 100, 아크릴 끔)으로 지정(백업 후 {path} 수정)")
     sys.exit(0)
 backup = f"{path}.bak-{time.strftime('%Y%m%d%H%M%S')}"
 shutil.copy2(path, backup)
 open(mark, "w").write(backup + "\n")
 data["schemes"] = [s for s in schemes if s.get("name") != name] + [scheme]
 defaults["colorScheme"] = name
+defaults["opacity"] = 100
+defaults["useAcrylic"] = False
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
     json.dump(data, fh, indent=4, ensure_ascii=False)
     fh.write("\n")
 print(f"Windows Terminal 에 '{name}' 적용 완료. 백업: {backup}")
 print("  (settings.json 의 주석은 저장 과정에서 사라질 수 있습니다. 필요하면 위 백업을 보세요.)")
 PY
+}
+
+# 프롬프트 색 역할 분리 + 입력한 명령어 강조 색. robbyrussell 모양(➜ 폴더 git:(브랜치) ✗)은 그대로 두고 색만 바꾼다.
+#   ➜ 초록(직전 명령 실패 시 빨강) · 폴더 파랑 굵게 · git:( ) 청록 · 브랜치 분홍(빨강이면 에러처럼 보여서) · ✗ 노랑
+#   입력 중인 명령어: 존재하는 명령 초록 굵게, 옵션 주황, 문자열 노랑, 경로 밑줄, 없는 명령 빨강, 주석 회색
+# 색 이름(green, blue ...)은 터미널의 Catppuccin 팔레트로 바뀌어 표시된다. oh-my-zsh 로드 뒤에 실행돼야 하므로 .zshrc 끝에 둔다.
+apply_prompt_colors() {
+  [ -f "$ZSHRC" ] || return 0
+  if grep -qF "$PROMPT_START" "$ZSHRC"; then echo "프롬프트 색상 이미 적용됨"; return 0; fi
+  echo "프롬프트·명령어 색상 적용"
+  if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 끝에 프롬프트 색상 블록 추가"; return 0; fi
+  cat >>"$ZSHRC" <<'EOF'
+# >>> terminal-setup: prompt colors v1 >>>
+PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%c%f%b $(git_prompt_info)'
+ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
+ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
+ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %F{yellow}%1{✗%}%f"
+ZSH_THEME_GIT_PROMPT_CLEAN="%F{cyan})%f"
+typeset -gA ZSH_HIGHLIGHT_STYLES
+ZSH_HIGHLIGHT_STYLES[command]='fg=green,bold'
+ZSH_HIGHLIGHT_STYLES[builtin]='fg=green,bold'
+ZSH_HIGHLIGHT_STYLES[alias]='fg=green,bold'
+ZSH_HIGHLIGHT_STYLES[function]='fg=green,bold'
+ZSH_HIGHLIGHT_STYLES[precommand]='fg=cyan,bold'
+ZSH_HIGHLIGHT_STYLES[single-hyphen-option]='fg=#FAB387'
+ZSH_HIGHLIGHT_STYLES[double-hyphen-option]='fg=#FAB387'
+ZSH_HIGHLIGHT_STYLES[single-quoted-argument]='fg=yellow'
+ZSH_HIGHLIGHT_STYLES[double-quoted-argument]='fg=yellow'
+ZSH_HIGHLIGHT_STYLES[path]='fg=white,underline'
+ZSH_HIGHLIGHT_STYLES[comment]='fg=8'
+ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=red,bold'
+# <<< terminal-setup: prompt colors <<<
+EOF
+}
+
+# 자주 쓰는 alias·PATH 블록. 개인 서버 주소 같은 비밀은 넣지 않는다(이 저장소는 공개).
+# WSL 전용 alias(win, gs)는 WSL 일 때만 넣는다. win 은 사용자명을 하드코딩하지 않고 실행 시 찾는다.
+apply_extras() {
+  [ -f "$ZSHRC" ] || return 0
+  if grep -qF "$EXTRAS_START" "$ZSHRC"; then echo "shell extras(alias/PATH) 이미 적용됨"; return 0; fi
+  echo "shell extras(alias/PATH) 추가"
+  if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 끝에 alias/PATH 블록 추가"; return 0; fi
+  {
+    cat <<'EOF'
+# >>> terminal-setup: shell extras v1 >>>
+# oh-my-zsh 기본 alias 중 방해되는 것 제거
+unalias -- - 2>/dev/null
+unalias '...' '....' '.....' '......' 2>/dev/null
+unalias 1 2 3 4 5 6 7 8 9 _ 2>/dev/null
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+if command -v nvim >/dev/null 2>&1; then alias vi='nvim'; elif command -v pairvim >/dev/null 2>&1; then alias vi='pairvim'; fi
+# eza: 소유자/용량/날짜까지 색상 적용된 ls 대체(Nerd Font 필요)
+command -v eza >/dev/null 2>&1 && alias ls="eza --color=always --icons=auto --group-directories-first"
+EOF
+    if is_wsl; then
+      cat <<'EOF'
+# Windows 사용자 폴더 / C 드라이브로 이동
+alias win='cd "$(wslpath "$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d "\r")")"'
+alias gs='cd /mnt/c/'
+EOF
+    fi
+    echo '# <<< terminal-setup: shell extras <<<'
+  } >>"$ZSHRC"
+}
+
+# eza(색상 ls). apt 에 없으면(오래된 Ubuntu) 건너뛰고 안내만 한다.
+ensure_eza() {
+  if command -v eza >/dev/null 2>&1; then echo "eza 이미 설치됨"; return 0; fi
+  command -v apt >/dev/null 2>&1 || { echo "apt 가 없어 eza 설치를 건너뜁니다."; return 0; }
+  local pol; pol="$(apt-cache policy eza 2>/dev/null || true)"
+  if grep -q 'Candidate: [^(]' <<<"$pol"; then
+    echo "eza 설치 중..."
+    run $SUDO apt install -y eza
+  else
+    echo "이 배포판 apt 에는 eza 가 없어 건너뜁니다(Ubuntu 24.04 이상에는 있음). alias 는 eza 가 없으면 자동으로 적용되지 않습니다."
+  fi
+}
+
+# dotfiles/ 의 설정을 홈으로 복사한다. 이미 같으면 건너뛰고, 다르면 백업한 뒤 덮어쓴다.
+install_dotfile() {
+  local src="$1" dest="$2" bak
+  [ -f "$src" ] || { echo "$src 가 없어 건너뜁니다." >&2; return 0; }
+  if [ -f "$dest" ] && cmp -s "$src" "$dest"; then echo "$dest 이미 같음"; return 0; fi
+  if [ -e "$dest" ]; then
+    bak="$dest.bak-$(date +%Y%m%d%H%M%S)"
+    echo "$dest 백업: $bak"
+    run cp -p "$dest" "$bak"
+    [ "$DRY" = 1 ] || echo "$dest|$bak" >>"$DOT_LOG"
+  fi
+  echo "$dest 설치"
+  run cp "$src" "$dest"
+}
+
+setup_dotfiles() {
+  install_dotfile "$SELF_DIR/dotfiles/tmux.conf" "$HOME/.tmux.conf"
+  install_dotfile "$SELF_DIR/dotfiles/vimrc" "$HOME/.vimrc"
+}
+
+# 순수 Ubuntu(GNOME Terminal)의 기본 프로필 색상을 Catppuccin Mocha 로. 바꾸기 전 값은 롤백용으로 저장한다.
+apply_gnome_terminal() {
+  is_wsl && return 0
+  command -v gsettings >/dev/null 2>&1 || { echo "gsettings 가 없어 GNOME Terminal 색상은 건너뜁니다."; return 0; }
+  local schemas; schemas="$(gsettings list-schemas 2>/dev/null || true)"
+  grep -qx 'org.gnome.Terminal.ProfilesList' <<<"$schemas" ||
+    { echo "GNOME Terminal 이 없어 창 색상은 건너뜁니다(다른 터미널은 catppuccin.com 에서 직접 적용)."; return 0; }
+  if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ ! -S "/run/user/$(id -u)/bus" ]; then
+    echo "데스크탑 세션이 아니라(SSH 등) GNOME Terminal 색상은 건너뜁니다. 데스크탑 터미널에서 다시 실행하세요."; return 0
+  fi
+  local uuid schema cur
+  uuid="$(gsettings get org.gnome.Terminal.ProfilesList default 2>/dev/null | tr -d "'")"
+  [ -n "$uuid" ] || { echo "GNOME Terminal 기본 프로필을 찾지 못해 건너뜁니다."; return 0; }
+  schema="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$uuid/"
+  cur="$(gsettings get "$schema" background-color 2>/dev/null | tr -d "'" | tr 'a-f' 'A-F')"
+  if [ "$cur" = "#1E1E2E" ]; then echo "GNOME Terminal 이미 Catppuccin Mocha"; return 0; fi
+  echo "GNOME Terminal 색상을 Catppuccin Mocha 로 설정(프로필 $uuid)"
+  if [ "$DRY" = 1 ]; then echo "[dry-run] gsettings set $schema (배경/글자/팔레트)"; return 0; fi
+  {
+    echo "uuid=$uuid"
+    local k
+    for k in use-theme-colors background-color foreground-color palette; do
+      printf '%s\t%s\n' "$k" "$(gsettings get "$schema" "$k" 2>/dev/null || true)"
+    done
+  } >"$GNOME_BACKUP"
+  gsettings set "$schema" use-theme-colors false
+  gsettings set "$schema" background-color '#1E1E2E'
+  gsettings set "$schema" foreground-color '#CDD6F4'
+  gsettings set "$schema" palette "['#45475A','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#BAC2DE','#585B70','#F38BA8','#A6E3A1','#F9E2AF','#89B4FA','#F5C2E7','#94E2D5','#A6ADC8']"
+  echo "  완료. 이미 열려 있는 터미널 창에는 바로 반영됩니다. 터미널 프로필 설정에서 폰트를 'JetBrainsMono Nerd Font' 로 고르세요."
+}
+
+# JetBrainsMono Nerd Font(아이콘용). 순수 Linux 에서만 설치한다(WSL 은 Windows 쪽에 설치해야 함). 체크섬이 맞을 때만 설치한다.
+ensure_font() {
+  if is_wsl; then
+    echo "WSL: 폰트는 Windows 에 설치해야 합니다. https://www.nerdfonts.com/font-downloads 의 JetBrainsMono 를 설치하세요(없으면 eza 아이콘이 네모로 보일 수 있음)."
+    return 0
+  fi
+  # 주의: `cmd | grep -q` 는 pipefail 에서 SIGPIPE 로 실패 처리되므로, 출력을 변수에 받아 검사한다.
+  local fonts=""
+  command -v fc-list >/dev/null 2>&1 && fonts="$(fc-list 2>/dev/null || true)"
+  if grep -qiE 'JetBrainsMono.*(Nerd|NF)' <<<"$fonts"; then
+    echo "JetBrainsMono Nerd Font 이미 설치됨"; return 0
+  fi
+  local base="https://github.com/ryanoasis/nerd-fonts/releases/latest/download" dest="$HOME/.local/share/fonts/JetBrainsMonoNF"
+  echo "JetBrainsMono Nerd Font 설치 중(체크섬 검증)..."
+  if [ "$DRY" = 1 ]; then echo "[dry-run] $base/JetBrainsMono.zip 을 받아 sha256 검증 후 $dest 에 설치"; return 0; fi
+  local tmp expected actual
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/ts-font.XXXXXX")"
+  if ! curl -fsSL "$base/JetBrainsMono.zip" -o "$tmp/f.zip" || ! curl -fsSL "$base/SHA-256.txt" -o "$tmp/sha.txt"; then
+    echo "폰트를 받지 못했습니다. 건너뜁니다."; rm -rf "$tmp"; return 0
+  fi
+  expected="$(grep -E ' JetBrainsMono\.zip$' "$tmp/sha.txt" | awk '{print $1}' | head -1)"
+  actual="$(sha256sum "$tmp/f.zip" | awk '{print $1}')"
+  if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+    echo "폰트 체크섬이 맞지 않아 설치하지 않습니다."; rm -rf "$tmp"; return 0
+  fi
+  mkdir -p "$dest" && unzip -oq "$tmp/f.zip" -d "$dest" && { command -v fc-cache >/dev/null 2>&1 && fc-cache -f "$dest" >/dev/null 2>&1 || true; }
+  rm -rf "$tmp"
+  echo "폰트 설치 완료($dest)"
+}
+
+# 기본 로그인 쉘을 zsh 로. 확인 후에만 바꾼다(--yes 로 확인 생략, 대화형이 아니면 안내만 한다).
+change_default_shell() {
+  local z cur
+  z="$(command -v zsh || true)"
+  [ -n "$z" ] || return 0
+  cur="$(getent passwd "$(id -un)" | cut -d: -f7)"
+  if [ "$cur" = "$z" ]; then echo "기본 쉘 이미 zsh"; return 0; fi
+  if [ "$DRY" = 1 ]; then echo "[dry-run] 기본 쉘을 $z 로 변경(chsh)"; return 0; fi
+  if [ "$YES" != 1 ]; then
+    if [ ! -t 0 ]; then echo "기본 쉘이 zsh 가 아닙니다. 대화형이 아니라 바꾸지 않았습니다. 직접: chsh -s $z (또는 --yes)"; return 0; fi
+    local ans
+    read -r -p "기본 쉘을 zsh 로 바꿀까요? (다음 로그인부터 적용) [Y/n] " ans
+    [[ -z "$ans" || "$ans" =~ ^[Yy]$ ]] || { echo "기본 쉘은 그대로 둡니다. 나중에: chsh -s $z"; return 0; }
+  fi
+  grep -qx "$z" /etc/shells 2>/dev/null || echo "$z" | $SUDO tee -a /etc/shells >/dev/null
+  $SUDO chsh -s "$z" "$(id -un)" && echo "기본 쉘을 zsh 로 변경했습니다. 로그아웃 후 다시 로그인하세요."
 }
 
 rollback() {
@@ -267,6 +492,23 @@ rollback() {
   else
     echo "Windows Terminal 백업이 없어 건너뜁니다($WT_BACKUP_MARK)."
   fi
+  # tmux/vim 등 dotfiles: 파일마다 가장 최근 백업으로 복원(새로 만든 파일은 그대로 둔다)
+  if [ -f "$DOT_LOG" ]; then
+    local dest bak
+    while IFS='|' read -r dest bak; do
+      [ -f "$bak" ] && { echo "$bak 로 $dest 를 되돌립니다."; run cp -p "$bak" "$dest"; }
+    done < <(tac "$DOT_LOG" | awk -F'|' '!seen[$1]++')
+  fi
+  # GNOME Terminal 색상
+  if [ -f "$GNOME_BACKUP" ] && command -v gsettings >/dev/null 2>&1; then
+    local uuid schema k v
+    uuid="$(sed -n 's/^uuid=//p' "$GNOME_BACKUP")"
+    schema="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$uuid/"
+    echo "GNOME Terminal 색상을 되돌립니다."
+    while IFS=$'\t' read -r k v; do
+      [ -n "$k" ] && [ -n "$v" ] && run gsettings set "$schema" "$k" "$v"
+    done < <(grep -v '^uuid=' "$GNOME_BACKUP")
+  fi
 }
 
 main() {
@@ -274,8 +516,9 @@ main() {
   for a in "$@"; do
     case "$a" in
       --dry-run) DRY=1 ;;
+      --yes | -y) YES=1 ;;
       --no-theme) THEME_ON=0 ;;
-      --with-pairvim) with_pairvim=1 ;;
+      --with-pairvim) with_pairvim=1; WITH_PAIRVIM=1 ;;
       --rollback) action=rollback ;;
       --help | -h) usage; exit 0 ;;
       *) echo "알 수 없는 옵션: $a" >&2; usage; exit 2 ;;
@@ -284,6 +527,7 @@ main() {
   if [ "$action" = rollback ]; then rollback; exit 0; fi
 
   echo "== 터미널 설정 시작 =="
+  ensure_sudo
   ensure_packages
   ensure_omz
   # 변경할 내용이 있을 때만 백업한다(안 그러면 재실행이 원본 백업을 덮어써 롤백이 무의미해짐)
@@ -294,15 +538,22 @@ main() {
     apply_syntax_plugin
     apply_spacing
     apply_ls_colors
+    apply_extras
+    apply_prompt_colors
     apply_windows_terminal
+    apply_gnome_terminal
+    ensure_font
   fi
+  ensure_eza
+  setup_dotfiles
+  change_default_shell
   if [ "$with_pairvim" = 1 ]; then
     echo "== PairVim 설치 =="
     if [ "$DRY" = 1 ]; then run bash "$SELF_DIR/install.sh" --dry-run; else bash "$SELF_DIR/install.sh"; fi
   fi
   echo "== 완료 =="
-  echo "새 터미널을 열거나 'exec zsh' 로 적용하세요. 기본 쉘이 zsh 가 아니면: chsh -s \$(which zsh)"
-  echo "Windows Terminal 색상은 설정 저장 즉시 바뀝니다."
+  echo "새 터미널을 열거나 'exec zsh' 로 적용하세요. tmux 는 'tmux kill-server' 후 다시 켜거나 tmux 안에서 prefix+r 로 다시 읽습니다."
+  echo "되돌리기: bash terminal-setup.sh --rollback"
 }
 
 main "$@"

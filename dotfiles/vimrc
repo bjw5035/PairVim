@@ -1,0 +1,21 @@
+syntax on
+set cursorline
+set hlsearch incsearch
+set ignorecase smartcase
+set tabstop=4 shiftwidth=4 softtabstop=4 expandtab
+set autoindent
+set ruler
+set showmatch
+filetype plugin indent on
+
+" 검색 결과 강조 해제: Space → h
+nnoremap <Space>h :nohlsearch<CR>
+" 들여쓰기 후 선택 영역 유지
+vnoremap < <gv
+vnoremap > >gv
+
+" 파일명 상태줄 항상 표시 / 터미널 탭 제목에 파일명 / 줄 번호
+set laststatus=2
+set statusline=%F%m%r%h%w\ %=%y\ %l/%L,%c\ %p%%
+set title
+set number
