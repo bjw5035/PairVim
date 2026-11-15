@@ -31,10 +31,55 @@
 
 | 상황 | 방법 |
 |---|---|
+| 새 PC에서 터미널 환경(zsh·테마·tmux 등)과 PairVim을 한 번에 | 아래 **한 줄 설치** |
+| 터미널 환경(프롬프트·색상)만 적용하거나 바꾸고 싶음 | 아래 **터미널 환경 설정** |
 | 처음 설치 (Neovim 설정이 없음) | 아래 **빠른 설치** |
 | 이미 LazyVim/Neovim 설정이 있음 (`~/.config/nvim` 존재) | 같은 **빠른 설치** — 설치 스크립트가 기존 설정을 이름 붙여 옮겨 두고(확인 후), 언제든 되돌릴 수 있음 |
 | 맥북(macOS) | 아래 **macOS(맥북)에서 설치** |
 | apt가 없는 그 밖의 환경 (Fedora 등) | 스크립트는 지원하지 않음. **수동 설치**를 참고해 직접 설치 |
+
+### 한 줄 설치 (터미널 환경 + PairVim, Ubuntu/WSL)
+
+```bash
+bash -c "$(wget -qO- https://raw.githubusercontent.com/bjw5035/PairVim/main/bootstrap.sh)"
+```
+
+- git이 없으면 설치하고, 저장소를 받고(`~/pairvim-setup`, 이미 `~/.config/nvim`이 PairVim이면 그것을 사용), 터미널 환경 설정(`terminal-setup.sh`)과 PairVim 설치(`install.sh`)까지 이어서 실행합니다.
+- 중간에 이런 것을 묻습니다. 모두 엔터만 누르면 기본값입니다.
+  - PairVim(Neovim 직접 빌드, 수 분 걸림)도 설치할지 `[Y/n]`
+  - 색상 테마 번호 (Catppuccin Mocha / Dracula / Nord / Tokyo Night / 건너뛰기)
+  - 관리자 비밀번호 (패키지 설치·기본 쉘 변경이 필요할 때만, 시작 시점에 한 번)
+  - 기본 쉘을 zsh로 바꿀지 `[Y/n]`
+- 옵션은 뒤에 `_`를 붙여 이어 씁니다: `bash -c "$(wget -qO- URL)" _ --dry-run` (`--dry-run` 계획만 출력 / `--no-pairvim` PairVim 제외 / `--scheme=이름` 테마 직접 지정 / `--choose` 테마 메뉴 다시 / `--no-theme` / `--yes` 질문 모두 예)
+- 끝나면 로그아웃 후 다시 로그인하거나 새 터미널을 엽니다.
+- `wget ... | bash`처럼 파이프로 실행하면 키 입력을 받을 수 없어 질문 없이 기본값으로 진행되므로, 위의 `bash -c "$(...)"` 형식을 쓰세요.
+
+### 터미널 환경 설정 (`terminal-setup.sh`)
+
+한 줄 설치에 포함된 단계이며 단독으로도 실행할 수 있습니다. 여러 번 실행해도 안전하고(이미 적용된 것은 건너뜀), 바꾸기 전에 항상 백업합니다. 이미 Starship 등이 설정된 PC도 지원합니다(Starship 초기화 줄은 주석 처리만 하고 지우지 않음).
+
+```bash
+bash ~/pairvim-setup/terminal-setup.sh --dry-run   # 무엇을 바꿀지 미리 보기
+bash ~/pairvim-setup/terminal-setup.sh             # 적용 (테마 메뉴가 뜸)
+bash ~/pairvim-setup/terminal-setup.sh --rollback  # 백업으로 되돌리기
+```
+
+| 적용되는 것 | 내용 |
+|---|---|
+| 쉘 | zsh + Oh My Zsh, 기본 쉘을 zsh로 변경(확인 후) |
+| 프롬프트 | `robbyrussell` 모양(`➜  폴더 git:(브랜치) ✗`)에 테마 색을 입힘 |
+| 입력 구분 | zsh-syntax-highlighting(존재하는 명령 초록 굵게·옵션 주황·없는 명령 빨강)과 프롬프트 앞 빈 줄 |
+| `ls` | `eza`(아이콘·색상, apt에 있을 때) + alias, `ls` 색상(LS_COLORS)을 테마 색으로 |
+| 색상 테마 | WSL이면 Windows Terminal 색상 스킴(불투명 배경), 순수 Ubuntu면 GNOME Terminal 프로필 색 |
+| 폰트 | 순수 Ubuntu에서 JetBrainsMono Nerd Font 설치(체크섬 검증). WSL은 Windows에 직접 설치 |
+| 설정 파일 | `dotfiles/tmux.conf`, `dotfiles/vimrc`를 `~/.tmux.conf`, `~/.vimrc`로 복사 |
+
+- **옵션**: `--dry-run`, `--yes`(질문 모두 예), `--choose`(테마 메뉴 다시), `--scheme=dracula|nord|tokyonight|catppuccin`(메뉴 없이 지정, iTerm2-Color-Schemes 저장소의 스킴 이름도 가능), `--bg=#RRGGBB`(배경색만 지정, 기본 `#282828`), `--no-theme`, `--with-pairvim`, `--rollback`
+- 고른 테마와 배경은 `~/.terminal-setup.conf`에 저장돼 다음 실행에서 유지됩니다.
+- **백업**: `~/.zshrc.bak-<시각>`, `~/.tmux.conf.bak-<시각>`, Windows Terminal `settings.json.bak-<시각>`. `--rollback`이 이 백업들로 되돌립니다.
+- **아이콘이 네모로 보이면** 터미널 폰트를 Nerd Font(JetBrainsMono Nerd Font)로 지정하세요. 순수 Ubuntu는 터미널 프로필에서 글꼴을 직접 골라야 합니다.
+- 이 저장소는 공개이므로 개인 서버 주소 같은 값은 넣지 않았습니다(필요한 alias는 `~/.zshrc`에 직접 추가).
+- apt 기반이라 macOS에서는 쓰지 않습니다. **시험한 범위**: WSL Ubuntu에서 실제 적용, 빈 홈 폴더에서 처음부터 설치. **시험하지 못한 것**: 순수 Ubuntu 데스크탑의 GNOME Terminal 색 변경·비밀번호 입력창·기본 쉘 변경, PairVim 빌드까지 한 번에 도는 전체 흐름.
 
 ### 빠른 설치 (처음이든 기존 설정이 있든 같은 방법)
 
