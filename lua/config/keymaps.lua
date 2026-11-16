@@ -65,7 +65,9 @@ vim.keymap.set("n", "<leader>\\", function()
     if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == before then return end
     local ok, snacks = pcall(require, "snacks")
     if ok and snacks.dashboard and vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_call(win, function() pcall(snacks.dashboard.open) end)
+      -- win 을 넘겨서 "닫은 그 창 안에" 시작 화면을 그린다. 넘기지 않으면 Snacks 가 화면 전체를 덮는 플로팅 창으로 열어서,
+      -- 이후 탐색기(l)로 연 파일이 그 아래 원래 창에 열려 시작 화면에 가려져 "파일이 안 뜬다"로 보였다.
+      pcall(snacks.dashboard.open, { win = win })
     end
     for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
       if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_picker_list" then

@@ -164,6 +164,14 @@ def check(name, cond, detail=""):
     results.append((name, bool(cond)))
     print(("PASS  " if cond else "FAIL  ") + name + ("" if cond else f"   <- {detail}"))
 
+# 시작 화면(snacks_dashboard) 창 수를 "전체/플로팅" 으로 돌려준다
+DASH_WINS = r'''luaeval('(function() local a, f = 0, 0 for _, w in ipairs(vim.api.nvim_list_wins()) do if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_dashboard" then a = a + 1 if vim.api.nvim_win_get_config(w).relative ~= "" then f = f + 1 end end end return a .. "/" .. f end)()')'''
+
+def explorer_select(name):
+    """탐색기 목록에서 이름이 name 인 항목으로 커서를 옮기는 --remote-expr 식(l 키로 열기 직전 상태를 만든다). 줄 번호, 없으면 -2."""
+    return ('luaeval(\'(function() local ps = require("snacks").picker.get({ source = "explorer" }) if not ps[1] then return -1 end '
+            'local l = ps[1].list for i = 1, l:count() do local it = l:get(i) if it and it.file and it.file:match("/%s$") then l:view(i) return i end end return -2 end)()\')') % name.replace(".", "%.")
+
 def open_explorer(n):
     n.send(LEADER + "e", 2.5)       # 탐색기 열림, 포커스는 탐색기
     n.send("\x0c", 0.8)             # Ctrl-l: 파일 창으로
@@ -178,10 +186,25 @@ def scenarios():
     check("탭2+탐색기: 탭이 1개로 줄어듦", n.kinds("file") and len(n.kinds("file")[0]["tabs"]) == 1, s)
     check("탭2+탐색기: 오류 메시지 없음", not n.errors(), n.errors()); n.close()
 
-    # ── 2. 탭 1개 + 탐색기: Space \ 는 종료 (탐색기만 남기지 않는다)
+    # ── 2. 탭 1개 + 탐색기: Space \ 는 그 파일만 닫는다(3db1055 이후 nvim 은 종료하지 않는다). 시작 화면은 닫은 창 안에 그린다.
     n = Nv("a.tf"); open_explorer(n)
     n.send(LEADER + "\\", 2)
-    check("탭1+탐색기: Space \\ 는 종료", not n.alive()); n.close()
+    check("탭1+탐색기: Space \\ 후 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors())
+    check("탭1+탐색기: 파일 창은 없고 탐색기는 유지", not n.kinds("file") and len(n.kinds("explorer")) >= 1, n.state())
+    check("탭1+탐색기: 시작 화면이 창 안에 있고 플로팅이 아님", n.q(DASH_WINS) == "1/0", n.q(DASH_WINS)); n.close()
+
+    # ── 2b. (과거 버그) 마지막 파일을 Space \ 로 닫은 뒤 탐색기에서 l 로 파일을 열면 시작 화면에 가려져 안 보였다
+    n = Nv("a.tf"); open_explorer(n)
+    n.send(LEADER + "\\", 2)
+    sel = n.q(explorer_select("b.tf"))
+    check("닫은 뒤 탐색기에서 b.tf 위치로 이동", sel.lstrip("-").isdigit() and int(sel) > 0, sel)
+    n.send("l", 2)
+    f = n.kinds("file")
+    check("l 로 연 b.tf 가 파일 창에 열림", any(w["file"] == "b.tf" for w in f), n.state())
+    check("l 로 연 뒤 플로팅 시작 화면이 남아 있지 않음(파일을 가리지 않음)", n.q(DASH_WINS).endswith("/0"), n.q(DASH_WINS))
+    scr = n.text()
+    if scr is not None: check("l 로 연 뒤 화면에 b.tf 내용이 보임", "b line 1" in scr, scr[-400:])
+    check("l 로 연 뒤 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
 
     # ── 3. 분할: Space ] 후 서로 다른 파일, 탐색기 유지, 커서 유지
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send("20G", 0.5); open_explorer(n)
