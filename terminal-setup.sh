@@ -163,6 +163,7 @@ zshrc_needs_change() {
   [ -f "$ZSHRC" ] || return 1
   grep -qE "^ZSH_THEME=\"$THEME\"" "$ZSHRC" || return 0
   grep -qE '^[[:space:]]*eval[[:space:]]+"\$\(starship init zsh\)"' "$ZSHRC" && return 0
+  grep -qF "zstyle ':omz:alpha:lib:git' async-prompt no" "$ZSHRC" || return 0
   if [ "$THEME_ON" = 1 ]; then
     grep -qF "$LS_START" "$ZSHRC" || return 0
     grep -qF "$SPACING_START" "$ZSHRC" || return 0
@@ -211,6 +212,14 @@ EOF
     changed=1
   else
     echo "활성 Starship 초기화 줄 없음"
+  fi
+  # 3) git 상태(✗ 표시)를 비동기 대신 동기로: 비동기면 방금 바뀐 파일이 반영 안 되고 한 박자 늦게(또는 안) 뜰 수 있음
+  if grep -qF "zstyle ':omz:alpha:lib:git' async-prompt no" "$ZSHRC"; then
+    echo "git 상태 동기 표시 이미 적용됨"
+  elif grep -q 'oh-my-zsh.sh' "$ZSHRC"; then
+    echo "git 상태(✗)를 동기 방식으로 변경"
+    run sed -i "/^source .*oh-my-zsh.sh/i zstyle ':omz:alpha:lib:git' async-prompt no" "$ZSHRC"
+    changed=1
   fi
   [ "$changed" = 1 ] && echo "~/.zshrc 프롬프트 설정 완료" || echo "~/.zshrc 프롬프트 변경 없음"
 }
