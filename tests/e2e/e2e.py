@@ -258,6 +258,18 @@ def scenarios():
     out = n.q("join(map(getbufinfo({'buftype':'terminal'}), 'join(getbufline(v:val.bufnr,1,10),\"|\")'),'#')")
     check("Space t p: terraform plan 이 파일 폴더에서 실행", "FAKE-terraform plan" in out, out[:120]); n.close()
 
+    # ── 6b. 파이썬 파일 실행(Space t r / F5): 셸 패널에서 파일이 있는 폴더 기준으로 python3 가 돈다
+    open(f"{FIX}/sub/hello.py", "w").write('print("PYOK-" + str(6 * 7))\n')
+    n = Nv("sub/hello.py"); n.send(LEADER + "tr", 3)
+    out = n.q("join(map(getbufinfo({'buftype':'terminal'}), 'join(getbufline(v:val.bufnr,1,12),\"|\")'),'#')")
+    check("Space t r: 파이썬 파일이 실행되어 결과가 셸 패널에 나옴", "PYOK-42" in out, out[:160])
+    check("Space t r: 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
+    n = Nv("sub/hello.py"); n.send("\x1b[15~", 3)
+    out = n.q("join(map(getbufinfo({'buftype':'terminal'}), 'join(getbufline(v:val.bufnr,1,12),\"|\")'),'#')")
+    check("F5: 파이썬 파일 실행", "PYOK-42" in out, out[:160]); n.close()
+    n = Nv("a.tf"); n.send(LEADER + "tr", 1.5)
+    check("Space t r: 파이썬이 아닌 파일은 실행하지 않고 오류 없음", n.alive() and len(n.kinds("term")) == 0, n.state()); n.close()
+
     # ── 7. 탐색기 토글/파일 열기
     n = Nv("a.tf"); n.send(LEADER + "e", 2.5)
     check("Space e: 탐색기 열림", len(n.kinds("explorer")) >= 1)

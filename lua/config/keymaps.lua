@@ -114,7 +114,7 @@ if ok_wk_h then
 end
 
 -- 터미널(셸) 패널: 편집하던 화면 아래에 기존 셸을 그대로 쓴다. 나가지 않고 terraform 등을 돌린다.
---   Space t t  셸 패널 토글(현재 파일이 있는 폴더에서 시작)   Space t p  terraform plan
+--   Space t t  셸 패널 토글(현재 파일이 있는 폴더에서 시작)   Space t r / F5  현재 파이썬 파일 실행   Space t p  terraform plan
 --   Space t v  terraform validate   Space t f  terraform fmt   Space t a  terraform apply는 일부러 만들지 않았다
 local shell_term
 local function shell_dir()
@@ -155,6 +155,58 @@ local function shell_run(cmd)
   end
   t:send("cd " .. vim.fn.shellescape(dir) .. " && " .. cmd)
 end
+-- 현재 파일 실행(Space t r 또는 F5): 아래에 실행 전용 패널을 열어 `python3 파일` 을 직접 돌린다.
+--  - 저장 안 한 변경은 먼저 저장하고, 파일이 있는 폴더에서 실행한다(그 폴더의 todos.json 같은 상대 경로 파일을 그대로 쓴다).
+--  - input() 이 있는 프로그램은 패널에서 바로 입력한다(패널이 열리면 입력 모드로 시작).
+--  - 끝나면 출력이 패널에 남는다. 코드를 고치고 다시 F5 를 누르면 이전 실행을 끄고 새로 돌린다.
+--  - 패널 안: F4 노멀 모드 → q 로 닫기, 또는 F5 로 코드 창으로 돌아가 다시 실행. (셸 패널 F3 과는 별개다)
+local run_term
+local function run_file()
+  if vim.bo.buftype ~= "" or vim.api.nvim_buf_get_name(0) == "" then
+    vim.notify("실행할 파일이 아닙니다(파일 창에서 눌러 주세요).", vim.log.levels.WARN)
+    return
+  end
+  if vim.bo.filetype ~= "python" then
+    vim.notify("지금은 파이썬 파일만 실행합니다. (셸 패널은 F3)", vim.log.levels.WARN)
+    return
+  end
+  local py = (vim.fn.executable("python3") == 1 and "python3") or (vim.fn.executable("python") == 1 and "python") or nil
+  if not py then
+    vim.notify("python3 를 찾지 못했습니다. 설치되어 있는지 확인하세요.", vim.log.levels.ERROR)
+    return
+  end
+  if vim.bo.modified then pcall(vim.cmd, "silent write") end
+  local file, dir = vim.fn.expand("%:t"), vim.fn.expand("%:p:h")
+  if run_term then
+    local old = run_term
+    run_term = nil
+    pcall(function() old:shutdown() end)
+  end
+  local Terminal = require("toggleterm.terminal").Terminal
+  local t
+  t = Terminal:new({
+    cmd = py .. " " .. vim.fn.shellescape(file),
+    dir = dir,
+    direction = "horizontal",
+    size = 16,
+    close_on_exit = false,
+    start_in_insert = true,
+    on_open = function(term)
+      local back = function()
+        pcall(vim.cmd, "stopinsert")
+        pcall(vim.cmd, "wincmd p")
+        run_file()
+      end
+      vim.keymap.set({ "n", "t" }, "<F5>", back, { buffer = term.bufnr, desc = "코드 창으로 돌아가 다시 실행" })
+      vim.keymap.set("n", "q", function() term:shutdown() end, { buffer = term.bufnr, desc = "실행 패널 닫기" })
+    end,
+    on_exit = function() if run_term == t then run_term = nil end end,
+  })
+  run_term = t
+  t:open()
+end
+vim.keymap.set("n", "<leader>tr", run_file, { desc = "현재 파일 실행 (python3)" })
+vim.keymap.set("n", "<F5>", run_file, { desc = "현재 파일 실행 (python3)" })
 vim.keymap.set("n", "<leader>tt", shell_toggle, { desc = "셸 패널 토글" })
 vim.keymap.set("t", "<F3>", function() if shell_term then shell_term:toggle() end end, { desc = "셸 패널 닫기" })
 vim.keymap.set("n", "<F3>", shell_toggle, { desc = "셸 패널 토글" })
