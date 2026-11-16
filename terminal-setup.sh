@@ -43,7 +43,7 @@ BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
-PROMPT_START='# >>> terminal-setup: prompt colors v10 >>>'
+PROMPT_START='# >>> terminal-setup: prompt colors v11 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
 DRY=0
@@ -428,8 +428,8 @@ apply_prompt_colors() {
     sed -i '/^# >>> terminal-setup: prompt colors/,/^# <<< terminal-setup: prompt colors <<</d' "$ZSHRC"
   fi
   cat >>"$ZSHRC" <<'EOF'
-# >>> terminal-setup: prompt colors v10 >>>
-PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%c%f%b $(git_prompt_info)'
+# >>> terminal-setup: prompt colors v11 >>>
+PROMPT='%(?:%B%F{green}%1{➜%}%f%b :%B%F{red}%1{➜%}%f%b ) %B%F{blue}%c%f%b $(git_prompt_info)%F{8}❯%f '
 ZSH_THEME_GIT_PROMPT_PREFIX="%F{cyan}git:(%f%F{magenta}"
 ZSH_THEME_GIT_PROMPT_SUFFIX="%f "
 ZSH_THEME_GIT_PROMPT_DIRTY="%F{cyan})%f %B%F{yellow}%1{✗%}%f%b"
