@@ -66,6 +66,11 @@ local function pairvim_highlights()
   set(0, "CursorLineNr", { fg = orange, bold = true })
   set(0, "SnacksDashboardHeader", { fg = blue })
   set(0, "SnacksIndentScope", { fg = purple })
+  -- 탐색기 폴더(이름 Directory, 아이콘 MiniIconsAzure)는 파랑 대신 옅은 로즈워터로 눌러 둔다. catppuccin 이면 팔레트에서, 아니면 고정값.
+  local ok, pal = pcall(function() return require("catppuccin.palettes").get_palette() end)
+  local folder = (ok and type(pal) == "table" and pal.rosewater) or "#f5e0dc"
+  set(0, "Directory", { fg = folder })
+  set(0, "MiniIconsAzure", { fg = folder })
 end
 vim.schedule(pairvim_highlights)
 vim.api.nvim_create_autocmd("ColorScheme", {
