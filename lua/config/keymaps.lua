@@ -133,7 +133,7 @@ local function get_shell()
       close_on_exit = true,
       start_in_insert = true,
       on_exit = function(t)
-        -- 셸이 끝나면(exit) 죽은 터미널 창이 남지 않게 정리하고, 다음 F3 가 새 셸을 연다
+        -- 셸이 끝나면(exit) 죽은 터미널 창이 남지 않게 정리하고, 다음 F7 가 새 셸을 연다
         shell_term = nil
         vim.schedule(function() pcall(function() t:shutdown() end) end)
       end,
@@ -159,7 +159,7 @@ end
 --  - 저장 안 한 변경은 먼저 저장하고, 파일이 있는 폴더에서 실행한다(그 폴더의 todos.json 같은 상대 경로 파일을 그대로 쓴다).
 --  - input() 이 있는 프로그램은 패널에서 바로 입력한다(패널이 열리면 입력 모드로 시작).
 --  - 끝나면 출력이 패널에 남는다. 코드를 고치고 다시 F5 를 누르면 이전 실행을 끄고 새로 돌린다.
---  - 패널 안: F4 노멀 모드 → q 로 닫기, 또는 F5 로 코드 창으로 돌아가 다시 실행. (셸 패널 F3 과는 별개다)
+--  - 패널 안: F8 노멀 모드 → q 로 닫기, 또는 F5 로 코드 창으로 돌아가 다시 실행. (셸 패널 F7 과는 별개다)
 local run_term
 local function run_file()
   if vim.bo.buftype ~= "" or vim.api.nvim_buf_get_name(0) == "" then
@@ -167,7 +167,7 @@ local function run_file()
     return
   end
   if vim.bo.filetype ~= "python" then
-    vim.notify("지금은 파이썬 파일만 실행합니다. (셸 패널은 F3)", vim.log.levels.WARN)
+    vim.notify("지금은 파이썬 파일만 실행합니다. (셸 패널은 F7)", vim.log.levels.WARN)
     return
   end
   local py = (vim.fn.executable("python3") == 1 and "python3") or (vim.fn.executable("python") == 1 and "python") or nil
@@ -208,8 +208,8 @@ end
 vim.keymap.set("n", "<leader>tr", run_file, { desc = "현재 파일 실행 (python3)" })
 vim.keymap.set("n", "<F5>", run_file, { desc = "현재 파일 실행 (python3)" })
 vim.keymap.set("n", "<leader>tt", shell_toggle, { desc = "셸 패널 토글" })
-vim.keymap.set("t", "<F3>", function() if shell_term then shell_term:toggle() end end, { desc = "셸 패널 닫기" })
-vim.keymap.set("n", "<F3>", shell_toggle, { desc = "셸 패널 토글" })
+vim.keymap.set("t", "<F7>", function() if shell_term then shell_term:toggle() end end, { desc = "셸 패널 닫기" })
+vim.keymap.set("n", "<F7>", shell_toggle, { desc = "셸 패널 토글" })
 vim.keymap.set("n", "<leader>tp", function() shell_run("terraform plan") end, { desc = "terraform plan (이 파일 폴더)" })
 vim.keymap.set("n", "<leader>tv", function() shell_run("terraform validate") end, { desc = "terraform validate" })
 vim.keymap.set("n", "<leader>tf", function() shell_run("terraform fmt") end, { desc = "terraform fmt" })

@@ -230,13 +230,13 @@ def scenarios():
     n.send(LEADER + "bd", 1.5); w = n.kinds("file")[0]
     check("Space b d: 현재 탭만 닫힘", n.alive() and w["file"] == "a.tf" and w["tabs"] == ["a.tf"], w); n.close()
 
-    # ── 5. Claude 패널: 열기/입력 모드/창 이동 복귀/Esc 전달/F4/닫기
+    # ── 5. Claude 패널: 열기/입력 모드/창 이동 복귀/Esc 전달/F8/닫기
     n = Nv("a.tf"); n.send(LEADER + "ac", 3); s = n.state()
     check("Claude 패널: 터미널 창 생김·입력 모드", len(n.kinds("term")) == 1 and s["mode"] == "t", s)
     n.send("\x1b", 0.8)
     check("Claude 패널: Esc 가 가로채이지 않음(터미널 모드 유지)", n.state()["mode"] == "t")
-    n.send("\x1bOS", 0.8)
-    check("Claude 패널: F4 로 노멀 모드", n.state()["mode"] == "n")
+    n.send("\x1b[19~", 0.8)
+    check("Claude 패널: F8 로 노멀 모드", n.state()["mode"] == "n")
     n.send("\x08", 0.8); n.send("\x0c", 1.2)
     check("Claude 패널: 창 이동 후 복귀하면 입력 모드", n.state()["mode"] == "t", n.state())
     n.send("hello\r", 1)
@@ -251,11 +251,11 @@ def scenarios():
     n.send(LEADER + "\\", 1.5)
     check("패널 열림 + 탭2: Space \\ 는 탭만 닫음(패널 유지)", n.alive() and len(n.kinds("term")) == 1 and len(n.kinds("file")) == 1, n.state()); n.close()
 
-    # ── 6. 셸 패널(F3)과 terraform
-    n = Nv("sub/s.tf"); n.send("\x1bOR", 1.5)
-    check("F3: 셸 패널 열림·입력 모드", len(n.kinds("term")) == 1 and n.state()["mode"] == "t", n.state())
-    n.send("\x1bOR", 1.2)
-    check("F3: 다시 누르면 닫힘", len(n.kinds("term")) == 0, n.state())
+    # ── 6. 셸 패널(F7)과 terraform
+    n = Nv("sub/s.tf"); n.send("\x1b[18~", 1.5)
+    check("F7: 셸 패널 열림·입력 모드", len(n.kinds("term")) == 1 and n.state()["mode"] == "t", n.state())
+    n.send("\x1b[18~", 1.2)
+    check("F7: 다시 누르면 닫힘", len(n.kinds("term")) == 0, n.state())
     n.send("\x1b", 0.3); n.send(LEADER + "tp", 2.5)
     out = n.q("join(map(getbufinfo({'buftype':'terminal'}), 'join(getbufline(v:val.bufnr,1,10),\"|\")'),'#')")
     check("Space t p: terraform plan 이 파일 폴더에서 실행", "FAKE-terraform plan" in out, out[:120]); n.close()
@@ -280,7 +280,7 @@ def scenarios():
 
     # ── 8. 연타(스트레스): 어떤 순서로 눌러도 죽거나 오류가 나지 않는다
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); open_explorer(n)
-    seq = [LEADER + "]", "\x08", "\x0c", LEADER + "[", "\t", LEADER + "\\", LEADER + "ac", "\x08", LEADER + "bd", "\x1bOR", "\x1bOR", LEADER + "\\"]
+    seq = [LEADER + "]", "\x08", "\x0c", LEADER + "[", "\t", LEADER + "\\", LEADER + "ac", "\x08", LEADER + "bd", "\x1b[18~", "\x1b[18~", LEADER + "\\"]
     for k in seq:
         n.send(k, 0.9)
         if not n.alive(): break
@@ -336,7 +336,7 @@ def scenarios_more():
     # ── 세션 복원: 인자 없이 켜면 자동으로 복원하지 않고(기본), 시작 화면의 s 로 창 배치·창별 탭이 돌아온다(탐색기·패널은 복원하지 않음)
     shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(LEADER + "]", 1.5); n.send(":e c.tf\r", 1); open_explorer(n); n.send(LEADER + "ac", 2.5)
-    n.send("\x1bOS", 0.5); n.send(":qa!\r", 3); n.close()
+    n.send("\x1b[19~", 0.5); n.send(":qa!\r", 3); n.close()
     n = Nv(); n.drain(4)
     check("세션 복원: 인자 없이 켜면 자동 복원 없이 시작 화면", not n.kinds("file") and n.q(DASH_WINS).startswith("1/"), n.state())
     n.send("s", 4)
@@ -360,6 +360,21 @@ def scenarios_more():
     n.send("\x1bOQ", 1.5); n.send("\r", 2.5)   # F2 → 첫 항목(Claude Code) 선택
     check("F2 선택기: 선택 후 살아 있고 오류 없음", n.alive() and not n.errors(), n.errors()); n.close()
 
+    # ── AI 패널: 파일 없이 켠 시작 화면(플로팅)·탐색기 포커스에서도 열림, F6 으로 닫기
+    # (과거 버그) 시작 화면이 화면 전체를 덮는 플로팅 창이라 패널이 가려졌고, 탐색기에 포커스가 있으면 toggleterm 이 "Invalid terminal direction" 오류를 냈다
+    for label, keys in (("Space a c", LEADER + "ac"), ("Space a x", LEADER + "ax")):
+        n = Nv(); n.drain(3); n.send(keys, 3)
+        check(f"시작 화면에서 {label}: 패널 열림·시작 화면은 일반 창", len(n.kinds("term")) == 1 and n.q(DASH_WINS).endswith("/0") and not n.errors(), n.state())
+        n.close()
+    n = Nv(); n.drain(3); n.send(LEADER + "e", 2.5); n.send(LEADER + "ac", 3)
+    check("탐색기 포커스에서 Space a c: 오류 없이 패널 열림", len(n.kinds("term")) == 1 and not n.errors() and n.q("luaeval('#Snacks.notifier.get_history()')") == "0", n.state())
+    n.send("\x1b[17~", 1.5)
+    check("F6: 패널 안에서 한 번에 닫힘·탐색기는 유지", len(n.kinds("term")) == 0 and len(n.kinds("explorer")) == 1, n.state()); n.close()
+    n = Nv("a.tf"); n.send(LEADER + "ac", 3); n.send("\x1b[17~", 1.5)
+    check("F6: 파일 창에서 연 패널도 닫힘", len(n.kinds("term")) == 0 and n.alive() and not n.errors(), n.state())
+    n.send(LEADER + "ax", 3); n.send("\x1b[17~", 1.5)
+    check("F6: Codex 패널도 닫힘", len(n.kinds("term")) == 0, n.state()); n.close()
+
     # ── 상태줄: AWS 프로필·terraform 워크스페이스
     os.makedirs(f"{FIX}/.terraform", exist_ok=True); open(f"{FIX}/.terraform/environment", "w").write("staging\n")
     n = Nv("a.tf", env={"AWS_PROFILE": "stg-admin"}); n.drain(2)
@@ -373,7 +388,7 @@ def scenarios_audit():
     keys = [("n", " hf"), ("n", " hr"), ("n", " hg"), ("n", " he"), ("n", " ht"), ("n", " hb"), ("n", " hs"), ("n", " hv"),
             ("n", " hx"), ("n", " hc"), ("n", " ha"), ("n", "<F2>"), ("t", "<F2>"), ("n", " ac"), ("n", " ax"), ("n", " aa"),
             ("n", "<Tab>"), ("n", "<S-Tab>"), ("n", "<S-h>"), ("n", "<S-l>"), ("n", " bd"), ("n", " ["), ("n", " ]"), ("n", " \\"),
-            ("n", " e"), ("n", "<F3>"), ("t", "<F3>"), ("n", " tt"), ("n", " tp"), ("n", " tv"), ("n", " tf"), ("n", "]b"), ("n", "[b")]
+            ("n", " e"), ("n", "<F7>"), ("t", "<F7>"), ("n", " tt"), ("n", " tp"), ("n", " tv"), ("n", " tf"), ("n", "]b"), ("n", "[b")]
     missing = []
     for mode, lhs in keys:
         l = lhs.replace(" ", "<Space>")
@@ -421,9 +436,9 @@ def scenarios_audit():
     check("탭 80개: 오류 없음", not n.errors(), n.errors()); n.close()
 
     # ── 터미널 프로세스가 끝난 뒤 다시 열 수 있는가
-    n = Nv("a.tf"); n.send("\x1bOR", 1.5); n.send("exit\r", 1.5)
-    n.send("\x1bOR", 1.5)
-    check("셸 패널: exit 후 F3 로 다시 열림", len(n.kinds("term")) == 1 and n.alive(), n.state())
+    n = Nv("a.tf"); n.send("\x1b[18~", 1.5); n.send("exit\r", 1.5)
+    n.send("\x1b[18~", 1.5)
+    check("셸 패널: exit 후 F7 로 다시 열림", len(n.kinds("term")) == 1 and n.alive(), n.state())
     check("셸 패널: exit 후 오류 없음", not n.errors(), n.errors()); n.close()
 
     # ── 인자 없이 켠 시작 화면(대시보드)에서의 동작
@@ -528,8 +543,8 @@ def scenarios_env():
         for cols, rows in ((100, 30), (180, 55), (120, 24)):
             t.resize(cols, rows); got = (t.q("&columns"), t.q("&lines"))
             check(f"tmux 크기 변경 {cols}x{rows}: nvim 이 따라감", got == (str(cols), str(rows)), got)
-        t.keys("F3"); time.sleep(1.2)
-        check("tmux: F3 키 이름(F3) 동작", t.q("len(filter(getbufinfo(), 'v:val.name =~ \"toggleterm\"'))") in ("1", "2"), "")
+        t.keys("F7"); time.sleep(1.2)
+        check("tmux: F7 키 이름(F7) 동작", t.q("len(filter(getbufinfo(), 'v:val.name =~ \"toggleterm\"'))") in ("1", "2"), "")
         t.close()
     else:
         print("SKIP  tmux 가 없어 tmux 시험을 건너뜀")
@@ -547,8 +562,8 @@ def scenarios_env():
     check("Backspace(0x7f): 패널에서 창 이동으로 오해하지 않음", n.state()["cur"] == before and n.state()["mode"] == "t", n.state())
     n.send("\x08", 1.0)
     check("Ctrl-h(0x08): 패널에서 왼쪽 창으로 이동", n.state()["cur"] != before, n.state())
-    n.send("\x1b[14~", 0.5); n.send("\x1b[13~", 1.2)
-    check("F 키 대체 시퀀스(F3=\\e[13~) 동작·오류 없음", n.alive() and not n.errors(), n.errors())
+    n.send("\x1b[19~", 0.5); n.send("\x1b[18~", 1.2)
+    check("F 키 대체 시퀀스(F7=\\e[18~) 동작·오류 없음", n.alive() and not n.errors(), n.errors())
     n.close()
 
     # ── 붙여넣기(bracketed paste): 여러 줄이 편집창과 패널에 그대로 들어가는가
@@ -773,8 +788,8 @@ def fuzz(seeds=(1, 2, 3), steps=18):
     """무작위 조합: 어떤 순서로 눌러도 (1) nvim 이 살아 있는 동안 파일 창이 1개 이상, (2) 오류 메시지 없음, (3) 상태를 읽을 수 있어야 한다."""
     import random
     normal_keys = [LEADER + "]", LEADER + "[", LEADER + "\\", LEADER + "bd", "\t", "\x1b[Z", LEADER + "e", LEADER + "ac",
-                   "\x1bOR", ":e c.tf\r", ":e d.tf\r", ":e sub/s.tf\r", "\x08", "\x0a", "\x0b", "\x0c", "j", "G", "gg"]
-    term_keys = ["\x08", "\x0a", "\x0b", "\x0c", "\x1bOR", "\x1bOS", "ls\r"]
+                   "\x1b[18~", ":e c.tf\r", ":e d.tf\r", ":e sub/s.tf\r", "\x08", "\x0a", "\x0b", "\x0c", "j", "G", "gg"]
+    term_keys = ["\x08", "\x0a", "\x0b", "\x0c", "\x1b[18~", "\x1b[19~", "ls\r"]
     for seed in seeds:
         rnd = random.Random(seed)
         n = Nv("a.tf"); n.send(":e b.tf\r", 1)

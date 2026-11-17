@@ -79,7 +79,54 @@ return {
         start_in_insert = true,
       })
 
+      -- 파일 없이 켠 시작 화면은 화면 전체를 덮는 플로팅 창이라, 그 위에서 패널을 열면 패널이 가려져 "안 열린다"로 보인다.
+      -- 패널을 열기 전에 시작 화면을 일반 창 안으로 옮긴다(Space \ 로 닫은 뒤 그리는 방식과 같다).
+      local function dock_dashboard()
+        local float
+        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          if vim.api.nvim_win_get_config(w).relative ~= "" and vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_dashboard" then
+            float = w
+            break
+          end
+        end
+        if not float then return end
+        local base
+        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          local b = vim.api.nvim_win_get_buf(w)
+          if vim.api.nvim_win_get_config(w).relative == "" and vim.bo[b].buftype == "" and vim.api.nvim_buf_get_name(b) == "" then
+            base = w
+            break
+          end
+        end
+        local ok, snacks = pcall(require, "snacks")
+        if not (base and ok and snacks.dashboard) then return end
+        pcall(vim.api.nvim_win_close, float, true)
+        if vim.api.nvim_win_is_valid(base) then
+          vim.api.nvim_set_current_win(base)
+          pcall(snacks.dashboard.open, { win = base })
+        end
+      end
+
+      -- 탐색기(Explorer)에 포커스가 있으면 현재 창이 플로팅이라, toggleterm 이 세로 분할을 못 열고
+      -- "Invalid terminal direction" 오류를 낸다. 패널을 열기 전에 포커스를 일반 창(파일·시작 화면)으로 옮긴다.
+      local function focus_main()
+        local cur = vim.api.nvim_get_current_win()
+        if vim.api.nvim_win_get_config(cur).relative == "" and vim.bo[vim.api.nvim_win_get_buf(cur)].buftype ~= "terminal" then
+          return
+        end
+        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          local b = vim.api.nvim_win_get_buf(w)
+          local ft = vim.bo[b].filetype
+          if vim.api.nvim_win_get_config(w).relative == "" and vim.bo[b].buftype ~= "terminal" and not ft:find("^snacks_picker") and not ft:find("^snacks_layout") then
+            vim.api.nvim_set_current_win(w)
+            return
+          end
+        end
+      end
+
       local function toggle_claude()
+        dock_dashboard()
+        focus_main()
         if codex:is_open() then
           codex:close()
         end
@@ -87,6 +134,8 @@ return {
       end
 
       local function toggle_codex()
+        dock_dashboard()
+        focus_main()
         if claude:is_open() then
           claude:close()
         end
@@ -111,6 +160,12 @@ return {
       -- 터미널 모드에서는 <leader>(스페이스)를 매핑하지 않는다: 스페이스를 칠 때마다 다음 키를 기다려
       -- 입력이 지연되고, " ac" 같은 글자를 치면 패널이 토글된다. 터미널 안에서는 F2만 쓴다.
       vim.keymap.set({ "n", "t" }, "<F2>", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
+      -- AI 패널 안(터미널 입력 모드)에서도 한 번에 닫는다. 열려 있는 쪽(Claude/Codex)만 닫고, 다시 열 때는 F2 또는 Space a c/x.
+      local function close_ai()
+        if claude:is_open() then claude:close() end
+        if codex:is_open() then codex:close() end
+      end
+      vim.keymap.set({ "n", "t" }, "<F6>", close_ai, { desc = "AI 패널 닫기 (Claude/Codex)" })
       vim.keymap.set("n", "<leader>aa", pick_ai, { desc = "AI 도구 선택 (Claude/Codex)" })
       vim.keymap.set("n", "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
       vim.keymap.set("n", "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
@@ -118,8 +173,8 @@ return {
       vim.api.nvim_create_autocmd("TermOpen", {
         pattern = "term://*",
         callback = function()
-          -- Esc 는 Claude Code(중단)·vi 가 쓰므로 가로채지 않는다. 노멀 모드로 나갈 때는 F4 (또는 기본 Ctrl-\ Ctrl-n)
-          vim.keymap.set("t", "<F4>", [[<C-\><C-n>]], { buffer = 0, desc = "터미널 노멀 모드로 빠져나가기" })
+          -- Esc 는 Claude Code(중단)·vi 가 쓰므로 가로채지 않는다. 노멀 모드로 나갈 때는 F8 (또는 기본 Ctrl-\ Ctrl-n)
+          vim.keymap.set("t", "<F8>", [[<C-\><C-n>]], { buffer = 0, desc = "터미널 노멀 모드로 빠져나가기" })
           vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], { buffer = 0, desc = "왼쪽 창으로 이동" })
           vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], { buffer = 0, desc = "아래 창으로 이동" })
           vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], { buffer = 0, desc = "위 창으로 이동" })
