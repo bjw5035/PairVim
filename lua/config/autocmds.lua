@@ -34,6 +34,14 @@ local function redraw_dashboard()
   if ok and snacks.dashboard and snacks.dashboard.update then
     pcall(snacks.dashboard.update)
   end
+  -- 혹시 wrap이 다시 켜져서 한글이 줄바꿈으로 잘려 보이는 것까지 방지(대시보드 창은 항상 wrap 꺼둔다)
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    local b = vim.api.nvim_win_get_buf(w)
+    if vim.bo[b].filetype == "snacks_dashboard" then
+      vim.wo[w].wrap = false
+      vim.wo[w].linebreak = false
+    end
+  end
 end
 vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "WinNew", "TermOpen", "WinClosed" }, {
   group = vim.api.nvim_create_augroup("pairvim_dashboard_redraw", { clear = true }),
