@@ -9,6 +9,7 @@
 - 새 머신에서 이 레포를 내려받아 nvim을 처음 실행하면 `codex`/`claude` CLI가 없을 경우 자동 설치
 - 단축키 가이드(which-key) 상위 그룹명 한글화
 - Neovim을 apt로 설치하지 않고, 소스를 받아 실행 파일 이름/버전 문구를 "pairvim"/"PairVim"으로 바꾼 뒤 직접 빌드 (`build-pairvim.sh`, `pairvim-rebrand.patch`)
+- WSL에서 vi 시작하거나 Insert 모드에서 빠져나올 때 윈도우 IME를 자동으로 영문으로 전환 (`im-select.exe`, `terminal-setup.sh`가 설치)
 
 ## 이런 때 씁니다
 
