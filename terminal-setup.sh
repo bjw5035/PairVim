@@ -435,6 +435,7 @@ ensure_im_select() {
   if [ "$DRY" = 1 ]; then echo "[dry-run] im-select.exe 를 $dest 에 받음"; return 0; fi
   run mkdir -p "$appdata/im-select"
   if run curl -fsSL "https://raw.githubusercontent.com/daipeihust/im-select/master/win/out/x64/im-select.exe" -o "$dest"; then
+    run chmod +x "$dest" # /mnt/c에 새로 받은 파일은 기본 644로 생겨서 실행권한이 없음
     echo "im-select.exe 설치 완료: $dest"
   else
     echo "im-select.exe 받기 실패 - vi에서 IME 자동 전환은 안 됩니다(기능에는 영향 없음)." >&2
