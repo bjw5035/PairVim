@@ -51,6 +51,9 @@ vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "WinNew", "TermOpen", 
   end,
 })
 
+-- vi 쓸 때 입력기(IME)를 영문으로 강제 전환 (WSL + im-select.exe)
+require("config.ime")
+
 -- 창(분할)마다 자기 탭 목록을 갖는 탭줄
 require("config.pane-tabs")
 

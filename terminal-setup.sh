@@ -423,6 +423,24 @@ print("  (settings.json 의 주석은 저장 과정에서 사라질 수 있습�
 PY
 }
 
+# WSL이면 nvim(vi)이 쓸 im-select.exe(윈도우 IME 한/영 전환 도구)를 %LOCALAPPDATA%\im-select 에 받아 둔다.
+# (nvim 쪽 설정은 lua/config/ime.lua 에 있고, 이 파일이 있어야 작동한다. 공식 배포 바이너리를 그대로 받는다.)
+ensure_im_select() {
+  is_wsl || { echo "WSL이 아니라 IME 자동 전환(im-select)은 건너뜁니다."; return 0; }
+  local appdata; appdata="$(wslpath "$(cmd.exe /c "echo %LOCALAPPDATA%" 2>/dev/null | tr -d '\r')" 2>/dev/null)"
+  [ -n "$appdata" ] || { echo "윈도우 LOCALAPPDATA 경로를 못 찾아 im-select 설치를 건너뜁니다."; return 0; }
+  local dest="$appdata/im-select/im-select.exe"
+  if [ -f "$dest" ]; then echo "im-select.exe 이미 있음: $dest"; return 0; fi
+  echo "im-select.exe 받는 중 (vi 쓸 때 영문 IME로 자동 전환용)..."
+  if [ "$DRY" = 1 ]; then echo "[dry-run] im-select.exe 를 $dest 에 받음"; return 0; fi
+  run mkdir -p "$appdata/im-select"
+  if run curl -fsSL "https://raw.githubusercontent.com/daipeihust/im-select/master/win/out/x64/im-select.exe" -o "$dest"; then
+    echo "im-select.exe 설치 완료: $dest"
+  else
+    echo "im-select.exe 받기 실패 - vi에서 IME 자동 전환은 안 됩니다(기능에는 영향 없음)." >&2
+  fi
+}
+
 # 프롬프트를 명령어/출력과 구분한다: 한 줄, 배경 블록 없이 색 글자만 쓴다.
 #   ➜  폴더 git:(브랜치) ✗ 입력   ← robbyrussell 원래 모양(이미지 그대로). ➜ 는 초록(직전 명령이 실패하면 빨강)
 #   폴더는 마지막 이름만(파랑 굵게), git:( ) 청록, 브랜치 분홍, ✗ 노랑 굵게. 색은 터미널 스킴을 따른다.
@@ -712,6 +730,7 @@ main() {
     apply_extras
     apply_prompt_colors
     apply_windows_terminal
+    ensure_im_select
     apply_gnome_terminal
     ensure_font
     save_conf
