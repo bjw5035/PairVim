@@ -27,13 +27,19 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 -- 시작 화면(대시보드)은 열려 있는 동안 창 크기가 바뀌어도(AI/셸 패널 열고 닫기, 탐색기 토글 등) 스스로
 -- 다시 그리지 않아서, 가로 폭이 바뀌면 로고가 한쪽으로 잘리거나 메뉴 한글이 깨져 보였다.
 -- 창 크기가 바뀔 때마다 강제로 다시 그려서 항상 현재 폭에 맞게 고치게 한다.
-vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
+-- WinResized 한 번으로는 부족할 때가 있어서(토글터미널이 창을 여는 동안 레이아웃이 여러 단계로 바뀜),
+-- 약간 지연시켜 레이아웃이 다 정리된 다음 그리고, 추가로 WinNew/TermOpen 에서도 한 번 더 그린다.
+local function redraw_dashboard()
+  local ok, snacks = pcall(require, "snacks")
+  if ok and snacks.dashboard and snacks.dashboard.update then
+    pcall(snacks.dashboard.update)
+  end
+end
+vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "WinNew", "TermOpen", "WinClosed" }, {
   group = vim.api.nvim_create_augroup("pairvim_dashboard_redraw", { clear = true }),
   callback = function()
-    local ok, snacks = pcall(require, "snacks")
-    if ok and snacks.dashboard and snacks.dashboard.update then
-      pcall(snacks.dashboard.update)
-    end
+    redraw_dashboard()
+    vim.defer_fn(redraw_dashboard, 60)
   end,
 })
 
