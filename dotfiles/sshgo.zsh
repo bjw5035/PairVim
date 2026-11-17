@@ -40,9 +40,11 @@ _sshgo_connect() {
     set timeout 15
     set pwcount 0
     spawn ssh $env(SSHP_HOST)
-    # interact 자체의 -re 매칭은 데이터가 여러 조각으로 나뉘어 도착하면 못 잡는 경우가 있어서(비동기/네트워크 타이밍에 따라
-    # 랜덤하게 실패) 신뢰할 수 없었다. 그래서 자동 처리는 항상 버퍼링되는 expect{}+exp_continue로 하고,
-    # Second Factor(OTP)처럼 직접 입력해야 하는 구간만 잠깐 interact로 넘겨서 제대로 타이핑(백스페이스 등)되게 한다.
+    # interact 자체의 -re 매칭은 (a) 데이터가 여러 조각으로 나뉘어 도착하면 못 잡는 경우가 있고
+    # (b) -nocase 옵션 자체를 지원하지 않아서(지원 안 되면 에러로 스크립트가 죽음) 신뢰할 수 없었다.
+    # 그래서 자동 처리는 항상 버퍼링되는 expect{}+exp_continue로 하고, Second Factor(OTP)만
+    # gets stdin으로 한 줄 받아서 그대로 전달한다 (이 시점엔 아직 interact를 안 써서 터미널이 일반
+    # 모드 그대로라 백스페이스 등 편집도 정상 동작한다).
     # (?i) 대신 -nocase를 쓰는 이유: expect가 패턴에서 자동으로 만드는 "gate" 사전 필터가 (?i)를 무시하고
     # 대소문자를 구분해버려서, 실제로 대문자가 섞인 프롬프트(예: Second Factor)를 통째로 놓치는 버그가 있었다.
     expect {
@@ -55,16 +57,7 @@ _sshgo_connect() {
         exp_continue
       }
       -nocase -re {second factor\s*:\s*$} {
-        interact {
-          -nocase -re {continue connecting|yes/no} { send -- "yes\r"; return }
-          -nocase -re {(password|first factor)\s*:\s*$} {
-            if {$pwcount < 2} {
-              send -- "$env(SSHP_PW)\r"
-              incr pwcount
-            }
-            return
-          }
-        }
+        send -- "[gets stdin]\r"
         exp_continue
       }
       timeout { }
