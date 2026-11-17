@@ -16,20 +16,23 @@ return {
         callback = function()
           local ok, pt = pcall(require, "config.pane-tabs")
           if not ok then return end
+          -- 파일 창만 담는다. 탐색기·패널은 복원되지 않으므로 함께 세면 복원할 때 창 순서가 밀린다.
           local data = {}
-          for i, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          for _, w in ipairs(pt.file_wins()) do
             local names = {}
             for _, b in ipairs(pt.list(w)) do
               local n = vim.api.nvim_buf_get_name(b)
               if n ~= "" then table.insert(names, n) end
             end
-            data[i] = names
+            table.insert(data, names)
           end
           vim.g.PairvimTabs = vim.json.encode(data)
         end,
       })
 
-      -- 복원 직후: 같은 순서의 창에 탭 목록을 되돌린다.
+      -- 복원 직후: 각 파일 창에, 그 창이 지금 보여 주는 파일이 들어 있는 탭 목록을 되돌린다.
+      -- 창 번호가 아니라 내용으로 짝을 맞춘다(과거 버그: 탐색기가 열린 채 저장하면 번호가 한 칸 밀려
+      -- 옆 창의 탭이 붙고 원래 탭이 사라졌다). 짝이 없는 창은 건드리지 않는다.
       vim.api.nvim_create_autocmd("SessionLoadPost", {
         group = group,
         callback = function()
@@ -38,11 +41,19 @@ return {
           local ok, data = pcall(vim.json.decode, raw)
           if not ok or type(data) ~= "table" then return end
           local pt = require("config.pane-tabs")
-          for i, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-            for _, name in ipairs(data[i] or {}) do
-              if vim.uv.fs_stat(name) then
-                pt.add(w, vim.fn.bufadd(name))
-                vim.bo[vim.fn.bufadd(name)].buflisted = true
+          local used = {}
+          for _, w in ipairs(pt.file_wins()) do
+            local cur = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w))
+            for i, names in ipairs(data) do
+              if not used[i] and type(names) == "table" and vim.tbl_contains(names, cur) then
+                used[i] = true
+                for _, name in ipairs(names) do
+                  if type(name) == "string" and vim.uv.fs_stat(name) then
+                    pt.add(w, vim.fn.bufadd(name))
+                    vim.bo[vim.fn.bufadd(name)].buflisted = true
+                  end
+                end
+                break
               end
             end
           end

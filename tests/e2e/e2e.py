@@ -243,7 +243,9 @@ def scenarios():
     check("Claude 패널: 입력이 터미널에 도달", "hello" in n.q("join(getline(1,20),'|')"))
     n.send("\x08", 0.8)     # 파일 창으로
     n.send(LEADER + "\\", 2)
-    check("패널 열림 + 탭1: 마지막 탭에서 Space \\ 는 nvim 종료(패널 포함)", not n.alive())
+    # 3db1055 이후: 마지막 파일에서 Space \ 는 nvim 을 끝내지 않고 그 파일만 닫는다. 패널은 그대로 남는다.
+    check("패널 열림 + 탭1: 마지막 탭에서 Space \\ 는 그 파일만 닫음(nvim·패널 유지)", n.alive() and not n.kinds("file") and len(n.kinds("term")) == 1, n.state())
+    check("패널 열림 + 탭1: 닫은 자리에 시작 화면(플로팅 아님)·오류 없음", n.q(DASH_WINS) == "1/0" and not n.errors(), (n.q(DASH_WINS), n.errors()))
     n.close()
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(LEADER + "ac", 3); n.send("\x08", 0.8)
     n.send(LEADER + "\\", 1.5)
@@ -319,8 +321,10 @@ def scenarios_more():
     n.send(LEADER + "\\", 1.5)
     n.send("c", 1.2)    # 확인창에서 Cancel
     check("수정 중 종료 시도 → 취소하면 살아 있고 수정 내용 유지", n.alive() and n.q("&modified") == "1", n.alive())
-    n.send(LEADER + "\\", 1.5); n.send("n", 2)
-    check("수정 중 종료 → 저장 안 함(n) 선택하면 종료", not n.alive()); n.close()
+    # 확인창의 답은 S/D/C 다(pane-tabs.close). d(Discard)는 버리고 그 파일만 닫으며 nvim 은 끝나지 않는다.
+    n.send(LEADER + "\\", 1.5); n.send("d", 2)
+    check("수정 중 마지막 파일 닫기 → d(Discard) 이면 버리고 닫히며 nvim 은 유지", n.alive() and not n.kinds("file") and n.q(DASH_WINS) == "1/0", n.state())
+    check("수정 중 마지막 파일 닫기 → d(Discard): 파일에는 저장되지 않음·오류 없음", open(f"{FIX}/a.tf").readline() == "# a line 1\n" and not n.errors(), n.errors()); n.close()
 
     # ── 수정 중인 탭 닫기(Space b d): 영문 단축키 S/D/C 로 답한다
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send("ichanged\x1b", 0.8)
@@ -329,14 +333,17 @@ def scenarios_more():
     n.send(LEADER + "bd", 1.5); n.send("d", 1.5)
     check("수정 중 탭 닫기: d(Discard) 이면 버리고 닫힘", n.alive() and "b.tf" not in n.kinds("file")[0]["tabs"], n.state()); n.close()
 
-    # ── 세션 복원: 인자 없이 켜면 창 배치·창별 탭이 돌아온다(탐색기·패널은 복원하지 않음)
+    # ── 세션 복원: 인자 없이 켜면 자동으로 복원하지 않고(기본), 시작 화면의 s 로 창 배치·창별 탭이 돌아온다(탐색기·패널은 복원하지 않음)
     shutil.rmtree(f"{XDG['XDG_STATE_HOME']}/nvim/sessions", ignore_errors=True)
     n = Nv("a.tf"); n.send(":e b.tf\r", 1); n.send(LEADER + "]", 1.5); n.send(":e c.tf\r", 1); open_explorer(n); n.send(LEADER + "ac", 2.5)
     n.send("\x1bOS", 0.5); n.send(":qa!\r", 3); n.close()
     n = Nv(); n.drain(4)
+    check("세션 복원: 인자 없이 켜면 자동 복원 없이 시작 화면", not n.kinds("file") and n.q(DASH_WINS).startswith("1/"), n.state())
+    n.send("s", 4)
     f = n.kinds("file")
-    check("세션 복원: 파일 창 2개", len(f) == 2, n.state())
-    check("세션 복원: 창별 탭 유지", sorted(sorted(w["tabs"]) for w in f) in ([["a.tf"], ["b.tf", "c.tf"]], [["a.tf", "b.tf"], ["c.tf"]], [["a.tf"], ["b.tf"]], [["a.tf", "c.tf"], ["b.tf"]]) or all(w["tabs"] for w in f), [w["tabs"] for w in f])
+    check("세션 복원: 시작 화면의 s 로 파일 창 2개", len(f) == 2, n.state())
+    # (과거 버그) 탐색기가 열린 채 저장하면 창 번호가 한 칸 밀려, 복원 뒤 둘째 창에 a.tf 가 붙고 b.tf 탭이 사라졌다
+    check("세션 복원: 창별 탭 유지(탐색기·패널이 열린 채 저장해도)", sorted(sorted(w["tabs"]) for w in f) == [["a.tf"], ["b.tf", "c.tf"]], [w["tabs"] for w in f])
     check("세션 복원: 터미널 패널은 복원 안 함·오류 없음", not n.kinds("term") and not n.errors(), n.errors()); n.close()
     n = Nv("a.tf")
     check("세션 복원: 파일 인자를 주면 복원하지 않음", len(n.kinds("file")) == 1 and len(n.kinds("file")[0]["tabs"]) == 1, n.state()); n.close()
@@ -642,7 +649,9 @@ def scenarios_env():
     n = Nv("a.tf"); n.send(":e ephemeral.tf\r", 1); n.send(":qa!\r", 3); n.close()
     os.remove(tmpf)
     n = Nv(); n.drain(4)
-    check("세션 복원: 지워진 파일이 있어도 살아 있고 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e or "stack traceback" in e], n.errors()); n.close()
+    n.send("s", 4)          # 자동 복원은 기본으로 꺼져 있으므로 시작 화면의 s 로 복원한다
+    check("세션 복원: 지워진 파일이 있어도 살아 있고 오류 없음", n.alive() and not [e for e in n.errors() if "E5108" in e or "stack traceback" in e], n.errors())
+    check("세션 복원: 지워진 파일이 있어도 남은 파일(a.tf)은 탭으로 돌아옴", any("a.tf" in w["tabs"] for w in n.kinds("file")), n.state()); n.close()
 
     # ── 큰 파일(30MB)을 열어도 멈추지 않는가
     big = f"{FIX}/big.log"
@@ -776,10 +785,11 @@ def fuzz(seeds=(1, 2, 3), steps=18):
             k = rnd.choice(keys); trail.append(k)
             n.send(k, 0.9)
             if not n.alive():
-                break          # 종료는 허용(Space \\ 가 마지막 탭에서 종료하는 것은 정상)
+                break          # 종료는 허용(파일 창이 모두 닫혀 보조 창만 남으면 nvim 이 끝난다)
             st = n.state()
             if st is None: ok, why = False, "상태를 읽지 못함"; break
-            if not any(w["kind"] == "file" for w in st["wins"]):
+            # 마지막 파일을 Space \\ 로 닫으면 파일 창 대신 시작 화면이 남는다(3db1055 이후 정상)
+            if not any(w["kind"] == "file" for w in st["wins"]) and n.q(DASH_WINS).startswith("0/"):
                 ok, why = False, "파일 창이 하나도 없음: " + json.dumps(st["wins"], ensure_ascii=False); break
             errs = n.errors()
             if errs: ok, why = False, "오류: " + " / ".join(errs)[:200]; break
