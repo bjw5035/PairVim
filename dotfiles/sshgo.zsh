@@ -37,20 +37,38 @@ _sshgo_connect() {
   fi
   SSHP_PW="$_SSHP_PW" SSHP_HOST="$target" SSHGO_DEBUG="${SSHGO_DEBUG:-0}" expect -c '
     if {$env(SSHGO_DEBUG) == "1"} { exp_internal 1 }
+    set timeout 15
     set pwcount 0
     spawn ssh $env(SSHP_HOST)
-    # expect로 한 번 매칭하고 끝내는 대신, interact 안에서 패턴을 계속 감시한다.
-    # - host-key 확인(yes/no)과 비밀번호(First Factor)는 홉이 몇 개든 계속 자동 응답
-    # - Second Factor(OTP)는 매칭 패턴이 없어서 그냥 평소처럼 직접 입력하면 됨
-    interact {
-      -re {(?i)(continue connecting|yes/no)} { send -- "yes\r" }
+    # interact 자체의 -re 매칭은 데이터가 여러 조각으로 나뉘어 도착하면 못 잡는 경우가 있어서(비동기/네트워크 타이밍에 따라
+    # 랜덤하게 실패) 신뢰할 수 없었다. 그래서 자동 처리는 항상 버퍼링되는 expect{}+exp_continue로 하고,
+    # Second Factor(OTP)처럼 직접 입력해야 하는 구간만 잠깐 interact로 넘겨서 제대로 타이핑(백스페이스 등)되게 한다.
+    expect {
+      -re {(?i)(continue connecting|yes/no)} { send -- "yes\r"; exp_continue }
       -re {(?i)(password|first factor)\s*:\s*$} {
         if {$pwcount < 2} {
           send -- "$env(SSHP_PW)\r"
           incr pwcount
         }
+        exp_continue
       }
+      -re {(?i)second factor\s*:\s*$} {
+        interact {
+          -re {(?i)(continue connecting|yes/no)} { send -- "yes\r"; return }
+          -re {(?i)(password|first factor)\s*:\s*$} {
+            if {$pwcount < 2} {
+              send -- "$env(SSHP_PW)\r"
+              incr pwcount
+            }
+            return
+          }
+        }
+        exp_continue
+      }
+      timeout { }
+      eof { }
     }
+    interact
   '
 }
 
