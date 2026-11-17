@@ -43,6 +43,7 @@ BACKUP_MARK="$HOME/.zshrc.last-backup"
 WT_BACKUP_MARK="$HOME/.wt-settings.last-backup"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTRAS_START='# >>> terminal-setup: shell extras v1 >>>'
+SSHGO_START='# >>> terminal-setup: sshgo/gitall v1 >>>'
 PROMPT_START='# >>> terminal-setup: prompt colors v12 >>>'
 DOT_LOG="$HOME/.terminal-setup.dotfiles.log"
 GNOME_BACKUP="$HOME/.terminal-setup.gnome-terminal.last-backup"
@@ -169,6 +170,7 @@ zshrc_needs_change() {
     grep -qF "$SPACING_START" "$ZSHRC" || return 0
     grep -qE "^plugins=\(.*$SYN_NAME" "$ZSHRC" || return 0
     grep -qF "$EXTRAS_START" "$ZSHRC" || return 0
+    grep -qF "$SSHGO_START" "$ZSHRC" || return 0
     grep -qF "$PROMPT_START" "$ZSHRC" || return 0
   fi
   return 1
@@ -490,6 +492,21 @@ EOF
   } >>"$ZSHRC"
 }
 
+# sshgo/gitall: 개인 SSH 접속 헬퍼 + 레포 일괄 pull 함수. 실제 서버 IP/상세 목록은 안 들어있고
+# (그건 머신마다 ~/.ssh/config 에 따로 두는 것), bastion 분류용 별명과 함수 코드만 들어있다.
+apply_sshgo() {
+  [ -f "$ZSHRC" ] || return 0
+  if grep -qF "$SSHGO_START" "$ZSHRC"; then echo "sshgo/gitall 이미 적용됨"; return 0; fi
+  [ -f "$SELF_DIR/dotfiles/sshgo.zsh" ] || { echo "dotfiles/sshgo.zsh 가 없어 건너뜀" >&2; return 0; }
+  echo "sshgo/gitall 추가"
+  if [ "$DRY" = 1 ]; then echo "[dry-run] ~/.zshrc 끝에 sshgo/gitall 블록 추가"; return 0; fi
+  {
+    echo "$SSHGO_START"
+    cat "$SELF_DIR/dotfiles/sshgo.zsh"
+    echo '# <<< terminal-setup: sshgo/gitall <<<'
+  } >>"$ZSHRC"
+}
+
 # eza(색상 ls). apt 에 없으면(오래된 Ubuntu) 건너뛰고 안내만 한다.
 ensure_eza() {
   if command -v eza >/dev/null 2>&1; then echo "eza 이미 설치됨"; return 0; fi
@@ -700,6 +717,7 @@ main() {
     save_conf
     if [ -n "$SCHEME_FILE" ]; then rm -f "$SCHEME_FILE"; fi
   fi
+  apply_sshgo
   ensure_eza
   setup_dotfiles
   change_default_shell
