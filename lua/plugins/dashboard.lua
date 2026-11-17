@@ -52,6 +52,9 @@ return {
               end
             end
             table.insert(keys, pos, item)
+            for _, k in ipairs(keys) do
+              k.icon = nil -- 아이콘 폭 오계산으로 좁은 폭에서 한글이 깨지는 걸 막기 위해 아이콘 없이 표시
+            end
             return keys
           end,
         },
