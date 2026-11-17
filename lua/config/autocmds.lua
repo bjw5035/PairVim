@@ -41,20 +41,31 @@ local function pairvim_highlights()
   local bg = normal.bg
   local dark = shade(bg, 0.72) or "#14141c"
   local lift = shade(bg, 1.0) and string.format("#%06x", math.min(0xffffff, (bg or 0x1a1b26) + 0x141418)) or "#2a2e45"
+  -- 포인트 색은 현재 컬러스킴의 문법 색에서 읽어 온다(스킴을 바꿔도 따라간다). 못 읽으면 예전 tokyonight 값을 쓴다.
+  local function fg_of(group, fallback)
+    local c = vim.api.nvim_get_hl(0, { name = group, link = false }).fg
+    return type(c) == "number" and string.format("#%06x", c) or fallback
+  end
+  local blue = fg_of("Function", "#7aa2f7")
+  local orange = fg_of("Constant", "#ff9e64")
+  local purple = fg_of("Keyword", "#bb9af7")
+  local yellow = fg_of("DiagnosticWarn", "#e0af68")
+  local text = fg_of("Normal", "#c0caf5")
+  local dim = fg_of("Comment", "#636c96")
   set(0, "NormalNC", { bg = dark })                          -- 포커스 없는 창: 어둡게
-  set(0, "WinSeparator", { fg = "#7aa2f7", bg = "NONE" })    -- 창 구분선: 파란색
-  set(0, "TabLine", { fg = "#7a82a8", bg = dark })           -- 비활성 탭
-  set(0, "TabLineSel", { fg = "#c0caf5", bg = lift, bold = true }) -- 활성 탭
+  set(0, "WinSeparator", { fg = blue, bg = "NONE" })         -- 창 구분선
+  set(0, "TabLine", { fg = dim, bg = dark })                 -- 비활성 탭
+  set(0, "TabLineSel", { fg = text, bg = lift, bold = true }) -- 활성 탭
   set(0, "TabLineFill", { bg = dark })
-  set(0, "PairTabAccent", { fg = "#7aa2f7", bg = lift })     -- 활성 탭 왼쪽 파란 막대
-  set(0, "PairTabClose", { fg = "#636c96", bg = dark })
-  set(0, "PairTabModified", { fg = "#e0af68", bg = lift, bold = true })
+  set(0, "PairTabAccent", { fg = blue, bg = lift })          -- 활성 탭 왼쪽 막대
+  set(0, "PairTabClose", { fg = dim, bg = dark })
+  set(0, "PairTabModified", { fg = yellow, bg = lift, bold = true })
   set(0, "WinBar", { bg = dark })
   set(0, "WinBarNC", { bg = dark })
   set(0, "CursorLine", { bg = lift })
-  set(0, "CursorLineNr", { fg = "#ff9e64", bold = true })
-  set(0, "SnacksDashboardHeader", { fg = "#7aa2f7" })
-  set(0, "SnacksIndentScope", { fg = "#bb9af7" })
+  set(0, "CursorLineNr", { fg = orange, bold = true })
+  set(0, "SnacksDashboardHeader", { fg = blue })
+  set(0, "SnacksIndentScope", { fg = purple })
 end
 vim.schedule(pairvim_highlights)
 vim.api.nvim_create_autocmd("ColorScheme", {
