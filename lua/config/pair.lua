@@ -83,11 +83,13 @@ function M.check(silent, cb)
   end)
 end
 
-local function finish()
+-- applied=true(새 커밋을 받았을 때)만 재시작 확인창을 띄운다. 이미 최신이면 플러그인만 맞추고 조용히 끝낸다.
+local function finish(applied)
   local ok = pcall(vim.cmd, "Lazy! restore")
   if not ok then notify("플러그인 맞추기(:Lazy restore)에 실패했습니다. :Pair plugins 에서 확인하세요.", vim.log.levels.WARN) end
   M.behind = 0
   refresh_dash()
+  if not applied then return end
   local ans = vim.fn.confirm("업데이트를 적용하려면 nvim 을 다시 시작해야 합니다.", "&Quit 지금 종료\n&Later 나중에", 2)
   if ans == 1 then vim.cmd("confirm qall") end
 end
@@ -107,7 +109,7 @@ function M.update()
         git({ "log", "--oneline", "--no-decorate", "HEAD..@{u}" }, function(_, log)
           if log == "" then
             notify("이미 최신입니다. 플러그인만 잠금 파일에 맞춥니다.")
-            finish()
+            finish(false)
             return
           end
           git({ "pull", "--ff-only", "--quiet" }, function(c3, _, e3)
@@ -118,7 +120,7 @@ function M.update()
             local lines = vim.split(log, "\n")
             local shown = vim.list_slice(lines, 1, 8)
             notify(("%d개 반영:\n%s%s"):format(#lines, table.concat(shown, "\n"), #lines > 8 and "\n…" or ""))
-            finish()
+            finish(true)
           end)
         end)
       end)
