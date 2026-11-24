@@ -65,6 +65,9 @@ _sshgo_connect() {
     }
     interact
   '
+  # expect가 터미널을 raw 모드로 남겨둔 채 끝나는 경우가 있어서(방향키 등이 ^[[A 처럼 그대로 찍힘),
+  # 접속이 끝나면 항상 터미널 상태를 정상으로 되돌린다.
+  stty sane 2>/dev/null
 }
 
 sshp_clear() {
