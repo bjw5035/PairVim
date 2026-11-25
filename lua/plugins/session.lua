@@ -49,8 +49,9 @@ return {
                 used[i] = true
                 for _, name in ipairs(names) do
                   if type(name) == "string" and vim.uv.fs_stat(name) then
-                    pt.add(w, vim.fn.bufadd(name))
-                    vim.bo[vim.fn.bufadd(name)].buflisted = true
+                    local b = vim.fn.bufadd(name)
+                    pt.add(w, b)
+                    vim.bo[b].buflisted = true
                   end
                 end
                 break
