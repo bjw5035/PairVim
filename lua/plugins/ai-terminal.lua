@@ -170,6 +170,60 @@ return {
       vim.keymap.set("n", "<leader>ac", toggle_claude, { desc = "Claude Code 패널 토글" })
       vim.keymap.set("n", "<leader>ax", toggle_codex, { desc = "Codex 패널 토글" })
 
+      -- VS Code처럼 "지금 보는 파일"을 AI가 자동으로 알지는 못하지만, claude/codex CLI 모두
+      -- "@경로" 를 입력창에 쓰면 그 파일을 읽어서 컨텍스트에 넣는 기능이 있다.
+      -- 방금까지 보고 있던(=실제 편집 중인) 파일을 기억해 두고, 패널로 포커스를 옮기는 순간
+      -- 자동으로 "@그파일 "을 채워준다. 엔터는 치지 않아 이어서 질문을 타이핑할 수 있다.
+      -- 같은 파일을 그 패널에 이미 전달했으면 다시 보내지 않는다 — 안 그러면 패널과 편집 창을
+      -- 왔다갔다 할 때마다, 또는 파일을 여러 개 스쳐 지나갈 때마다 입력창에 "@a @b @c ..."가
+      -- 계속 쌓여서 질문하려던 내용 앞에 엉뚱한 파일들이 끼어들게 된다.
+      local last_file = nil
+      local sent_for = {}
+
+      local function track_file(buf)
+        if vim.bo[buf].buftype ~= "" then return end
+        local name = vim.api.nvim_buf_get_name(buf)
+        if name == "" then return end
+        local ft = vim.bo[buf].filetype
+        if ft:find("^snacks_") or ft == "help" or ft == "qf" then return end
+        last_file = name
+      end
+      -- BufEnter만으로 충분하다(창을 옮기면 항상 같이 온다) — BufWinEnter까지 같이 걸면
+      -- 거의 매번 둘 다 불려서 같은 파일을 두 번 기록하는 중복만 생긴다.
+      vim.api.nvim_create_autocmd("BufEnter", {
+        callback = function(a) track_file(a.buf) end,
+      })
+
+      local function attach_file(term, name)
+        name = name or last_file
+        if not name or sent_for[term] == name then return end
+        if not term.job_id or term.job_id <= 0 then return end
+        local rel = vim.fn.fnamemodify(name, ":~:.")
+        -- 앞에 공백을 하나 둬서, 패널 입력창에 이미 커서/타이핑된 내용이 있어도 그 글자에
+        -- "@file.lua"가 바로 이어붙지 않게 한다(빈 입력창이면 무해한 선행 공백만 남는다).
+        vim.fn.chansend(term.job_id, " @" .. rel .. " ")
+        sent_for[term] = name
+      end
+
+      -- 수동으로 즉시 전달하고 싶을 때(같은 파일을 다시 언급하고 싶을 때 등)를 위한 단축키는 남겨둔다.
+      local function send_file_to_ai()
+        local name = vim.api.nvim_buf_get_name(0)
+        if name == "" or vim.bo.buftype ~= "" then
+          vim.notify("파일이 아닌 창입니다.", vim.log.levels.WARN, { title = "PairVim" })
+          return
+        end
+        local term = claude:is_open() and claude or (codex:is_open() and codex or nil)
+        if not term then
+          vim.notify("AI 패널이 열려 있지 않습니다. F2 또는 Space a c/x 로 먼저 여세요.", vim.log.levels.WARN, { title = "PairVim" })
+          return
+        end
+        sent_for[term] = nil -- 수동 호출은 같은 파일이어도 강제로 다시 보낸다
+        attach_file(term, name)
+        term:focus()
+        vim.cmd("startinsert")
+      end
+      vim.keymap.set("n", "<leader>af", send_file_to_ai, { desc = "현재 파일을 AI 패널에 전달 (@파일)" })
+
       vim.api.nvim_create_autocmd("TermOpen", {
         pattern = "term://*",
         callback = function()
@@ -179,6 +233,20 @@ return {
           vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], { buffer = 0, desc = "아래 창으로 이동" })
           vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], { buffer = 0, desc = "위 창으로 이동" })
           vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], { buffer = 0, desc = "오른쪽 창으로 이동" })
+          -- 패널을 처음 열 때는(재진입이 아니라 새로 뜰 때) 아래 BufEnter/WinEnter 쪽이 아니라
+          -- 여기서 한 번 붙여준다 — 처음 열릴 때는 버퍼가 term:// 이름을 갖기 전에 창 포커스가
+          -- 먼저 옮겨져서 BufEnter/WinEnter(term://*) 쪽이 못 잡는다.
+          -- job_id는 termopen()이 "반환"할 때 채워지는데 TermOpen은 그 호출 안에서(반환 전에)
+          -- 터지므로, 지금 당장 읽으면 아직 nil이라 chansend가 "Invalid argument"로 죽는다.
+          -- 한 틱 뒤로 미뤄서 termopen()이 다 끝난 뒤에 읽는다.
+          local buf = vim.api.nvim_get_current_buf()
+          vim.schedule(function()
+            if buf == claude.bufnr then
+              attach_file(claude)
+            elseif buf == codex.bufnr then
+              attach_file(codex)
+            end
+          end)
         end,
       })
 
@@ -190,7 +258,14 @@ return {
           if vim.bo.buftype == "terminal" then
             -- 이벤트 안에서 바로 호출하면 창 이동 명령이 끝나면서 무시되므로 다음 틱에 실행한다
             vim.schedule(function()
-              if vim.bo.buftype == "terminal" and vim.fn.mode() == "n" then
+              if vim.bo.buftype ~= "terminal" then return end
+              local buf = vim.api.nvim_get_current_buf()
+              if buf == claude.bufnr then
+                attach_file(claude)
+              elseif buf == codex.bufnr then
+                attach_file(codex)
+              end
+              if vim.fn.mode() == "n" then
                 vim.cmd("startinsert")
               end
             end)
