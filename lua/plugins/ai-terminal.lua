@@ -79,50 +79,10 @@ return {
         start_in_insert = true,
       })
 
-      -- 파일 없이 켠 시작 화면은 화면 전체를 덮는 플로팅 창이라, 그 위에서 패널을 열면 패널이 가려져 "안 열린다"로 보인다.
-      -- 패널을 열기 전에 시작 화면을 일반 창 안으로 옮긴다(Space \ 로 닫은 뒤 그리는 방식과 같다).
-      local function dock_dashboard()
-        local float
-        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-          if vim.api.nvim_win_get_config(w).relative ~= "" and vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_dashboard" then
-            float = w
-            break
-          end
-        end
-        if not float then return end
-        local base
-        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-          local b = vim.api.nvim_win_get_buf(w)
-          if vim.api.nvim_win_get_config(w).relative == "" and vim.bo[b].buftype == "" and vim.api.nvim_buf_get_name(b) == "" then
-            base = w
-            break
-          end
-        end
-        local ok, snacks = pcall(require, "snacks")
-        if not (base and ok and snacks.dashboard) then return end
-        pcall(vim.api.nvim_win_close, float, true)
-        if vim.api.nvim_win_is_valid(base) then
-          vim.api.nvim_set_current_win(base)
-          pcall(snacks.dashboard.open, { win = base })
-        end
-      end
-
-      -- 탐색기(Explorer)에 포커스가 있으면 현재 창이 플로팅이라, toggleterm 이 세로 분할을 못 열고
-      -- "Invalid terminal direction" 오류를 낸다. 패널을 열기 전에 포커스를 일반 창(파일·시작 화면)으로 옮긴다.
-      local function focus_main()
-        local cur = vim.api.nvim_get_current_win()
-        if vim.api.nvim_win_get_config(cur).relative == "" and vim.bo[vim.api.nvim_win_get_buf(cur)].buftype ~= "terminal" then
-          return
-        end
-        for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-          local b = vim.api.nvim_win_get_buf(w)
-          local ft = vim.bo[b].filetype
-          if vim.api.nvim_win_get_config(w).relative == "" and vim.bo[b].buftype ~= "terminal" and not ft:find("^snacks_picker") and not ft:find("^snacks_layout") then
-            vim.api.nvim_set_current_win(w)
-            return
-          end
-        end
-      end
+      -- 대시보드 도킹 / 포커스 이동은 F7 셸 패널과 공유하는 lua/config/term-util.lua 로 옮겼다(중복 방지).
+      local term_util = require("config.term-util")
+      local dock_dashboard = term_util.dock_dashboard
+      local focus_main = term_util.focus_main
 
       local function toggle_claude()
         dock_dashboard()

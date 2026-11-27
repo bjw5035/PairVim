@@ -141,17 +141,41 @@ local function get_shell()
   end
   return shell_term
 end
+-- 대시보드 도킹 / 포커스 이동(둘 다 "Invalid terminal direction", E21 같은 오류를 막는다)은
+-- Space a c/x AI 패널과 공유한다 — lua/config/term-util.lua 참고.
+local term_util = require("config.term-util")
+local focus_main = term_util.focus_main
+local dock_dashboard = term_util.dock_dashboard
+-- 처음 열 때는 toggleterm 전역 size(=AI 패널용 panel_size, 가로폭 기준 함수)가
+-- 잘못 적용돼 패널이 화면을 거의 다 차지하던 버그가 있어 16줄로 강제한다.
+-- 그 다음부터는 강제하지 않아서, 사용자가 직접 리사이즈(Ctrl-w +/-, 마우스 드래그)한
+-- 크기가 persist_size(toggleterm 기본 동작)로 세션 내내 유지된다.
+local shell_sized = false
 local function shell_toggle()
   local t = get_shell()
   if not t:is_open() and not t.job_id then t.dir = shell_dir() end
-  t:toggle()
+  dock_dashboard()
+  focus_main()
+  if shell_sized then
+    t:toggle()
+  else
+    shell_sized = true
+    t:toggle(16, "horizontal")
+  end
 end
 local function shell_run(cmd)
   local dir = shell_dir()
   local t = get_shell()
   if not t:is_open() then
     if not t.job_id then t.dir = dir end
-    t:open()
+    dock_dashboard()
+    focus_main()
+    if shell_sized then
+      t:open()
+    else
+      shell_sized = true
+      t:open(16, "horizontal")
+    end
   end
   t:send("cd " .. vim.fn.shellescape(dir) .. " && " .. cmd)
 end
